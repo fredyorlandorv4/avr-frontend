@@ -34,113 +34,15 @@ const AVRSystem = () => {
 
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
 
-  // ✅ NEW: Follow-ups state con datos de ejemplo
-  const [followUps, setFollowUps] = useState([
-    {
-      id: 1,
-      contact_name: "María González",
-      phone: "+502 5555-1234",
-      description: "Seguimiento de propuesta enviada - cliente interesado en lote 15",
-      due_date: "2024-12-14",
-      priority: "high",
-      campaign_id: 1,
-      campaign_name: "Campaña Navideña",
-      completed: false,
-      completed_date: null,
-      created_at: "2024-12-10T10:30:00"
-    },
-    {
-      id: 2,
-      contact_name: "Carlos Pérez",
-      phone: "+502 5555-5678",
-      description: "Revisar disponibilidad de pago mensual - negociación pendiente",
-      due_date: "2024-12-18",
-      priority: "medium",
-      campaign_id: 1,
-      campaign_name: "Campaña Navideña",
-      completed: false,
-      completed_date: null,
-      created_at: "2024-12-12T14:20:00"
-    },
-    {
-      id: 3,
-      contact_name: "Ana Martínez",
-      phone: "+502 5555-9012",
-      description: "Enviar documentación adicional solicitada por el cliente",
-      due_date: "2024-12-17",
-      priority: "high",
-      campaign_id: 2,
-      campaign_name: "Proyecto Primavera",
-      completed: false,
-      completed_date: null,
-      created_at: "2024-12-11T09:15:00"
-    },
-    {
-      id: 4,
-      contact_name: "Roberto Silva",
-      phone: "+502 5555-3456",
-      description: "Confirmar visita al proyecto - cliente solicitó recorrido",
-      due_date: "2024-12-13",
-      priority: "medium",
-      campaign_id: 1,
-      campaign_name: "Campaña Navideña",
-      completed: true,
-      completed_date: "2024-12-13T16:45:00",
-      created_at: "2024-12-08T11:00:00"
-    },
-    {
-      id: 5,
-      contact_name: "Patricia López",
-      phone: "+502 5555-7890",
-      description: "Aclarar dudas sobre financiamiento - cliente necesita más información",
-      due_date: "2024-12-19",
-      priority: "low",
-      campaign_id: 2,
-      campaign_name: "Proyecto Primavera",
-      completed: false,
-      completed_date: null,
-      created_at: "2024-12-13T13:30:00"
-    },
-    {
-      id: 6,
-      contact_name: "Jorge Ramírez",
-      phone: "+502 5555-2468",
-      description: "Cierre de venta - preparar documentos finales",
-      due_date: "2024-12-12",
-      priority: "high",
-      campaign_id: 1,
-      campaign_name: "Campaña Navideña",
-      completed: true,
-      completed_date: "2024-12-12T10:20:00",
-      created_at: "2024-12-09T15:10:00"
-    },
-    {
-      id: 7,
-      contact_name: "Luis Hernández",
-      phone: "+502 5555-8765",
-      description: "Llamar para confirmar interés en lote 23",
-      due_date: "2024-12-20",
-      priority: "medium",
-      campaign_id: 1,
-      campaign_name: "Campaña Navideña",
-      completed: false,
-      completed_date: null,
-      created_at: "2024-12-14T08:30:00"
-    },
-    {
-      id: 8,
-      contact_name: "Sofía Morales",
-      phone: "+502 5555-4321",
-      description: "Enviar cotización actualizada con descuento especial",
-      due_date: "2024-12-15",
-      priority: "high",
-      campaign_id: 2,
-      campaign_name: "Proyecto Primavera",
-      completed: true,
-      completed_date: "2024-12-15T11:20:00",
-      created_at: "2024-12-13T10:00:00"
-    }
-  ]);
+  // Follow-ups state
+  const [followUps, setFollowUps] = useState([]);
+  const [followUpStats, setFollowUpStats] = useState({
+    total: 0,
+    green: 0,
+    orange: 0,
+    red: 0,
+    completed: 0
+  });
 
   const callsByHour = [
     { hour: '08:00', calls: 12 },
@@ -182,6 +84,9 @@ const AVRSystem = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Guardar token en localStorage
+        localStorage.setItem('authToken', data.access_token);
+        localStorage.setItem('username', username);
         setAuthToken(data.access_token);
         setIsLoggedIn(true);
       } else {
@@ -196,6 +101,9 @@ const AVRSystem = () => {
   };
 
   const handleLogout = () => {
+    // Limpiar localStorage
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('username');
     setIsLoggedIn(false);
     setUsername('');
     setPassword('');
@@ -305,12 +213,12 @@ const AVRSystem = () => {
     }
   };
 
-  // ✅ NEW: Load follow-ups from backend
+  // Load follow-ups from backend
   const loadFollowUps = async () => {
     if (!authToken) return;
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/followups?skip=0&limit=100', {
+      const response = await fetch('http://localhost:8000/api/v1/follow-ups?skip=0&limit=100', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
@@ -325,6 +233,29 @@ const AVRSystem = () => {
       }
     } catch (error) {
       console.error('Error loading follow-ups:', error);
+    }
+  };
+
+  // Load follow-up stats
+  const loadFollowUpStats = async () => {
+    if (!authToken) return;
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/follow-ups/stats', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFollowUpStats(data);
+      } else {
+        console.error('Error loading follow-up stats:', response.status);
+      }
+    } catch (error) {
+      console.error('Error loading follow-up stats:', error);
     }
   };
 
@@ -376,7 +307,7 @@ const AVRSystem = () => {
     }, 4000);
   };
 
-  // ✅ NEW: Toggle follow-up completion with backend integration
+  // Toggle follow-up completion with backend integration
   const toggleFollowUpCompletion = async (followUpId) => {
     const followUp = followUps.find(fu => fu.id === followUpId);
     if (!followUp) return;
@@ -391,7 +322,7 @@ const AVRSystem = () => {
           return {
             ...fu,
             completed: newCompleted,
-            completed_date: newCompleted ? new Date().toISOString() : null
+            completed_at: newCompleted ? new Date().toISOString() : null
           };
         }
         return fu;
@@ -402,13 +333,13 @@ const AVRSystem = () => {
     showToast(
       previousState 
         ? `Follow-up marcado como pendiente` 
-        : `✓ Follow-up completado para ${followUp.contact_name}`,
+        : `✓ Follow-up completado`,
       previousState ? 'info' : 'success'
     );
 
     // Actualizar en el backend
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/followups/${followUpId}/toggle`, {
+      const response = await fetch(`http://localhost:8000/api/v1/follow-ups/${followUpId}/complete`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -424,7 +355,7 @@ const AVRSystem = () => {
               return {
                 ...fu,
                 completed: previousState,
-                completed_date: previousState ? followUp.completed_date : null
+                completed_at: previousState ? followUp.completed_at : null
               };
             }
             return fu;
@@ -434,6 +365,7 @@ const AVRSystem = () => {
       } else {
         // Recargar para asegurar sincronización
         await loadFollowUps();
+        await loadFollowUpStats();
       }
     } catch (error) {
       console.error('Error toggling follow-up:', error);
@@ -444,7 +376,7 @@ const AVRSystem = () => {
             return {
               ...fu,
               completed: previousState,
-              completed_date: previousState ? followUp.completed_date : null
+              completed_at: previousState ? followUp.completed_at : null
             };
           }
           return fu;
@@ -454,15 +386,29 @@ const AVRSystem = () => {
     }
   };
 
+  // Verificar si hay token guardado al cargar la aplicación
+  useEffect(() => {
+    const savedToken = localStorage.getItem('authToken');
+    const savedUsername = localStorage.getItem('username');
+    
+    if (savedToken && savedUsername) {
+      setAuthToken(savedToken);
+      setUsername(savedUsername);
+      setIsLoggedIn(true);
+    }
+  }, []);
+
   useEffect(() => {
     if (isLoggedIn && authToken) {
       loadCalls();
       loadCampaigns();
       loadFollowUps();
+      loadFollowUpStats();
       const interval = setInterval(() => {
         loadCalls();
         loadCampaigns();
         loadFollowUps();
+        loadFollowUpStats();
       }, 30000);
       return () => clearInterval(interval);
     }
@@ -1666,39 +1612,24 @@ const AVRSystem = () => {
     );
   };
 
-  // ✅ NEW: Follow Ups View - Sistema de Semáforo
+  // Follow Ups View - Sistema de 4 Estados
   const FollowUpsView = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Clasificar follow-ups según status
+    const greenFollowUps = followUps.filter(fu => fu.status === 'green' && !fu.completed);
+    const orangeFollowUps = followUps.filter(fu => fu.status === 'orange' && !fu.completed);
+    const redFollowUps = followUps.filter(fu => fu.status === 'red' && !fu.completed);
+    const completedFollowUps = followUps.filter(fu => fu.completed);
 
-    // Clasificar follow-ups según fecha
-    const overdue = followUps.filter(fu => {
-      const dueDate = new Date(fu.due_date);
-      dueDate.setHours(0, 0, 0, 0);
-      return !fu.completed && dueDate < today;
-    });
-
-    const pending = followUps.filter(fu => {
-      const dueDate = new Date(fu.due_date);
-      dueDate.setHours(0, 0, 0, 0);
-      return !fu.completed && dueDate >= today;
-    });
-
-    const completed = followUps.filter(fu => fu.completed);
-
-    const FollowUpCard = ({ followUp, statusColor }) => {
-      const dueDate = new Date(followUp.due_date);
-      const isToday = dueDate.toDateString() === today.toDateString();
-      const daysDiff = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-
-      const priorityConfig = {
-        high: { label: 'Alta', color: 'bg-red-100 text-red-800' },
-        medium: { label: 'Media', color: 'bg-yellow-100 text-yellow-800' },
-        low: { label: 'Baja', color: 'bg-blue-100 text-blue-800' }
-      };
+    const FollowUpCard = ({ followUp, borderColor, bgColor }) => {
+      const scheduledDate = new Date(followUp.scheduled_date);
+      
+      // Dividir notes por el pipe "|"
+      const notesParts = followUp.notes.split('|');
+      const title = notesParts[0]?.trim() || '';
+      const description = notesParts[1]?.trim() || notesParts[0]?.trim() || '';
 
       return (
-        <div className={`bg-white rounded-lg border-l-4 ${statusColor} shadow-sm hover:shadow-md transition p-4`}>
+        <div className={`bg-white rounded-lg border-l-4 ${borderColor} shadow-sm hover:shadow-md transition p-4`}>
           <div className="flex items-start gap-3 mb-3">
             <input
               type="checkbox"
@@ -1707,39 +1638,46 @@ const AVRSystem = () => {
               className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
             />
             <div className="flex-1 min-w-0">
-              <h4 className={`font-semibold text-gray-800 mb-1 ${followUp.completed ? 'line-through text-gray-500' : ''}`}>
-                {followUp.contact_name}
-              </h4>
-              <p className="text-sm text-gray-600 mb-2">{followUp.phone}</p>
-              <p className={`text-sm mb-3 ${followUp.completed ? 'text-gray-400' : 'text-gray-700'}`}>
-                {followUp.description}
-              </p>
-
-              <div className="flex flex-wrap gap-2 mb-3">
-                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${priorityConfig[followUp.priority].color}`}>
-                  Prioridad {priorityConfig[followUp.priority].label}
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${bgColor}`}>
+                  ID: #{followUp.id}
                 </span>
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                  {followUp.campaign_name}
-                </span>
+                {followUp.call_id && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    Llamada #{followUp.call_id}
+                  </span>
+                )}
               </div>
+
+              {notesParts.length > 1 ? (
+                <>
+                  <h4 className={`font-semibold text-base mb-2 ${followUp.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                    {title}
+                  </h4>
+                  <p className={`text-sm mb-3 ${followUp.completed ? 'text-gray-400 line-through' : 'text-gray-600'}`}>
+                    {description}
+                  </p>
+                </>
+              ) : (
+                <p className={`text-sm mb-3 ${followUp.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                  {followUp.notes}
+                </p>
+              )}
 
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <div className="flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" />
                   {followUp.completed ? (
-                    <span>Completado: {new Date(followUp.completed_date).toLocaleDateString('es-GT')}</span>
+                    <span>Completado: {new Date(followUp.completed_at).toLocaleDateString('es-GT')}</span>
                   ) : (
-                    <span className={isToday ? 'text-orange-600 font-medium' : ''}>
-                      Vence: {dueDate.toLocaleDateString('es-GT')}
-                      {!followUp.completed && daysDiff >= 0 && (
-                        <span className="ml-1">
-                          ({daysDiff === 0 ? 'Hoy' : daysDiff === 1 ? 'Mañana' : `en ${daysDiff} días`})
-                        </span>
-                      )}
+                    <span>
+                      Programado: {scheduledDate.toLocaleDateString('es-GT')}
                     </span>
                   )}
                 </div>
+                <span className="text-xs text-gray-400">
+                  Creado: {new Date(followUp.created_at).toLocaleDateString('es-GT')}
+                </span>
               </div>
             </div>
           </div>
@@ -1753,11 +1691,12 @@ const AVRSystem = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Seguimiento de Follow Ups</h2>
-            <p className="text-sm text-gray-500 mt-1">Sistema de gestión por prioridad</p>
+            <p className="text-sm text-gray-500 mt-1">Sistema de gestión por estado</p>
           </div>
           <button 
             onClick={() => {
               loadFollowUps();
+              loadFollowUpStats();
               showToast('Follow-ups actualizados', 'success');
             }}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -1768,71 +1707,57 @@ const AVRSystem = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-600">Pendientes</h3>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <p className="text-3xl font-bold text-green-600">{followUpStats.green}</p>
+            <p className="text-xs text-gray-500 mt-1">En tiempo</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-600">Pronto a Vencer</h3>
+              <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+            </div>
+            <p className="text-3xl font-bold text-orange-600">{followUpStats.orange}</p>
+            <p className="text-xs text-gray-500 mt-1">Requieren atención</p>
+          </div>
+
           <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-red-500">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium text-gray-600">Vencidos</h3>
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
             </div>
-            <p className="text-3xl font-bold text-red-600">{overdue.length}</p>
-            <p className="text-xs text-gray-500 mt-1">Requieren atención urgente</p>
+            <p className="text-3xl font-bold text-red-600">{followUpStats.red}</p>
+            <p className="text-xs text-gray-500 mt-1">Urgente</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">Pendientes</h3>
-              <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-            </div>
-            <p className="text-3xl font-bold text-orange-600">{pending.length}</p>
-            <p className="text-xs text-gray-500 mt-1">En progreso</p>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+          <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium text-gray-600">Completados</h3>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
             </div>
-            <p className="text-3xl font-bold text-green-600">{completed.length}</p>
-            <p className="text-xs text-gray-500 mt-1">Finalizados exitosamente</p>
+            <p className="text-3xl font-bold text-blue-600">{followUpStats.completed}</p>
+            <p className="text-xs text-gray-500 mt-1">Finalizados</p>
           </div>
         </div>
 
-        {/* Vista Desktop - 3 Columnas */}
-        <div className="hidden lg:grid lg:grid-cols-3 gap-6">
-          {/* Columna Roja - Vencidos */}
+        {/* Vista Desktop - 4 Columnas */}
+        <div className="hidden lg:grid lg:grid-cols-4 gap-6">
+          {/* Columna Verde - Pendientes */}
           <div className="space-y-4">
-            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <h3 className="font-bold text-red-800">VENCIDOS</h3>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <h3 className="font-bold text-green-800">PENDIENTES</h3>
               </div>
-              <p className="text-sm text-red-700">{overdue.length} follow-up(s) requieren atención</p>
+              <p className="text-sm text-green-700">{greenFollowUps.length} en tiempo</p>
             </div>
             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-              {overdue.length === 0 ? (
-                <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Clock className="w-6 h-6 text-gray-400" />
-                  </div>
-                  <p className="text-gray-500 text-sm">No hay follow-ups vencidos</p>
-                </div>
-              ) : (
-                overdue.map(fu => <FollowUpCard key={fu.id} followUp={fu} statusColor="border-red-500" />)
-              )}
-            </div>
-          </div>
-
-          {/* Columna Naranja - Pendientes */}
-          <div className="space-y-4">
-            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                <h3 className="font-bold text-orange-800">PENDIENTES</h3>
-              </div>
-              <p className="text-sm text-orange-700">{pending.length} follow-up(s) en progreso</p>
-            </div>
-            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-              {pending.length === 0 ? (
+              {greenFollowUps.length === 0 ? (
                 <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <Clock className="w-6 h-6 text-gray-400" />
@@ -1840,22 +1765,89 @@ const AVRSystem = () => {
                   <p className="text-gray-500 text-sm">No hay follow-ups pendientes</p>
                 </div>
               ) : (
-                pending.map(fu => <FollowUpCard key={fu.id} followUp={fu} statusColor="border-orange-500" />)
+                greenFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-green-500"
+                    bgColor="bg-green-100 text-green-800"
+                  />
+                ))
               )}
             </div>
           </div>
 
-          {/* Columna Verde - Completados */}
+          {/* Columna Naranja - Pronto a Vencer */}
           <div className="space-y-4">
-            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                <h3 className="font-bold text-green-800">COMPLETADOS</h3>
+                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                <h3 className="font-bold text-orange-800">PRONTO A VENCER</h3>
               </div>
-              <p className="text-sm text-green-700">{completed.length} follow-up(s) finalizados</p>
+              <p className="text-sm text-orange-700">{orangeFollowUps.length} requieren atención</p>
             </div>
             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-              {completed.length === 0 ? (
+              {orangeFollowUps.length === 0 ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Clock className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 text-sm">No hay follow-ups próximos a vencer</p>
+                </div>
+              ) : (
+                orangeFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-orange-500"
+                    bgColor="bg-orange-100 text-orange-800"
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Columna Roja - Vencidos */}
+          <div className="space-y-4">
+            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <h3 className="font-bold text-red-800">VENCIDOS</h3>
+              </div>
+              <p className="text-sm text-red-700">{redFollowUps.length} urgentes</p>
+            </div>
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+              {redFollowUps.length === 0 ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Clock className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 text-sm">No hay follow-ups vencidos</p>
+                </div>
+              ) : (
+                redFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-red-500"
+                    bgColor="bg-red-100 text-red-800"
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Columna Azul - Completados */}
+          <div className="space-y-4">
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <h3 className="font-bold text-blue-800">COMPLETADOS</h3>
+              </div>
+              <p className="text-sm text-blue-700">{completedFollowUps.length} finalizados</p>
+            </div>
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+              {completedFollowUps.length === 0 ? (
                 <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <Clock className="w-6 h-6 text-gray-400" />
@@ -1863,7 +1855,14 @@ const AVRSystem = () => {
                   <p className="text-gray-500 text-sm">No hay follow-ups completados</p>
                 </div>
               ) : (
-                completed.map(fu => <FollowUpCard key={fu.id} followUp={fu} statusColor="border-green-500" />)
+                completedFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-blue-500"
+                    bgColor="bg-blue-100 text-blue-800"
+                  />
+                ))
               )}
             </div>
           </div>
@@ -1871,65 +1870,114 @@ const AVRSystem = () => {
 
         {/* Vista Mobile - Apilado */}
         <div className="lg:hidden space-y-6">
-          {/* Vencidos */}
-          <div className="space-y-3">
-            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <h3 className="font-bold text-red-800">VENCIDOS ({overdue.length})</h3>
-              </div>
-              <p className="text-sm text-red-700">Requieren atención urgente</p>
-            </div>
-            {overdue.length === 0 ? (
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
-                <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-500 text-sm">No hay follow-ups vencidos</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {overdue.map(fu => <FollowUpCard key={fu.id} followUp={fu} statusColor="border-red-500" />)}
-              </div>
-            )}
-          </div>
-
           {/* Pendientes */}
           <div className="space-y-3">
-            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                <h3 className="font-bold text-orange-800">PENDIENTES ({pending.length})</h3>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <h3 className="font-bold text-green-800">PENDIENTES ({greenFollowUps.length})</h3>
               </div>
-              <p className="text-sm text-orange-700">En progreso</p>
+              <p className="text-sm text-green-700">En tiempo</p>
             </div>
-            {pending.length === 0 ? (
+            {greenFollowUps.length === 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
                 <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-500 text-sm">No hay follow-ups pendientes</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {pending.map(fu => <FollowUpCard key={fu.id} followUp={fu} statusColor="border-orange-500" />)}
+                {greenFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-green-500"
+                    bgColor="bg-green-100 text-green-800"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pronto a Vencer */}
+          <div className="space-y-3">
+            <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                <h3 className="font-bold text-orange-800">PRONTO A VENCER ({orangeFollowUps.length})</h3>
+              </div>
+              <p className="text-sm text-orange-700">Requieren atención</p>
+            </div>
+            {orangeFollowUps.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+                <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-500 text-sm">No hay follow-ups próximos a vencer</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {orangeFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-orange-500"
+                    bgColor="bg-orange-100 text-orange-800"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Vencidos */}
+          <div className="space-y-3">
+            <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <h3 className="font-bold text-red-800">VENCIDOS ({redFollowUps.length})</h3>
+              </div>
+              <p className="text-sm text-red-700">Urgentes</p>
+            </div>
+            {redFollowUps.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+                <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-500 text-sm">No hay follow-ups vencidos</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {redFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-red-500"
+                    bgColor="bg-red-100 text-red-800"
+                  />
+                ))}
               </div>
             )}
           </div>
 
           {/* Completados */}
           <div className="space-y-3">
-            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                <h3 className="font-bold text-green-800">COMPLETADOS ({completed.length})</h3>
+                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <h3 className="font-bold text-blue-800">COMPLETADOS ({completedFollowUps.length})</h3>
               </div>
-              <p className="text-sm text-green-700">Finalizados exitosamente</p>
+              <p className="text-sm text-blue-700">Finalizados</p>
             </div>
-            {completed.length === 0 ? (
+            {completedFollowUps.length === 0 ? (
               <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
                 <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-500 text-sm">No hay follow-ups completados</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {completed.map(fu => <FollowUpCard key={fu.id} followUp={fu} statusColor="border-green-500" />)}
+                {completedFollowUps.map(fu => (
+                  <FollowUpCard 
+                    key={fu.id} 
+                    followUp={fu} 
+                    borderColor="border-blue-500"
+                    bgColor="bg-blue-100 text-blue-800"
+                  />
+                ))}
               </div>
             )}
           </div>
