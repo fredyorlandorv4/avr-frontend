@@ -1,15 +1,42 @@
-import { useState } from 'react';
-import { X, FileText, RefreshCw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, FileText, RefreshCw, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 
 export default function CreateCampaignView({ onCancel, onSuccess }) {
   const { authToken, logout } = useAuth();
   const [campaignName, setCampaignName] = useState('');
+  const [campaignTitle, setCampaignTitle] = useState('');
+  const [campaignDescription, setCampaignDescription] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+
+  // Cargar proyectos al montar el componente
+  useEffect(() => {
+    const loadProjects = async () => {
+      setProjectsLoading(true);
+      try {
+        const res = await apiFetch('/api/v1/projects', {
+          token: authToken,
+          onUnauthorized: logout,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProjects(Array.isArray(data) ? data : data.items || data.results || []);
+        }
+      } catch (err) {
+        if (err.message !== 'Unauthorized') console.error('Error loading projects:', err);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+    loadProjects();
+  }, []);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -45,12 +72,18 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
 
     try {
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      formData.append('file',          selectedFile);
+      formData.append('campaign_name', campaignName.trim());
+      if (campaignTitle.trim())       formData.append('title',       campaignTitle.trim());
+      if (campaignDescription.trim()) formData.append('description', campaignDescription.trim());
+      if (selectedProjectId)          formData.append('project_id',  selectedProjectId);
 
-      const response = await apiFetch(
-        `/api/v1/campaigns/upload?campaign_name=${encodeURIComponent(campaignName)}`,
-        { method: 'POST', token: authToken, onUnauthorized: logout, body: formData }
-      );
+      const response = await apiFetch('/api/v1/campaigns/upload', {
+        method: 'POST',
+        token: authToken,
+        onUnauthorized: logout,
+        body: formData,
+      });
 
       const data = await response.json();
 
@@ -111,6 +144,8 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* Nombre */}
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">Nombre de la Campaña *</label>
             <input
@@ -123,6 +158,56 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
             />
           </div>
 
+          {/* Título */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Título</label>
+            <input
+              type="text"
+              value={campaignTitle}
+              onChange={(e) => setCampaignTitle(e.target.value)}
+              disabled={uploadLoading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base disabled:bg-gray-100 disabled:cursor-not-allowed"
+              placeholder="Ej: Recordatorio de pago Q3"
+            />
+          </div>
+
+          {/* Proyecto asociado */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Proyecto Asociado</label>
+            <div className="relative">
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                disabled={uploadLoading || projectsLoading}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base appearance-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {projectsLoading ? 'Cargando proyectos...' : '-- Selecciona un proyecto --'}
+                </option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Descripción */}
+          <div className="lg:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
+            <textarea
+              value={campaignDescription}
+              onChange={(e) => setCampaignDescription(e.target.value)}
+              disabled={uploadLoading}
+              rows={3}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
+              placeholder="Describe el objetivo de esta campaña..."
+            />
+          </div>
+
+          {/* Upload Excel */}
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">Cargar Lista de Contactos (Excel) *</label>
             <div className={`border-2 border-dashed rounded-lg p-6 sm:p-12 text-center transition ${

@@ -1,4 +1,4 @@
-import { Target, RefreshCw, Play } from 'lucide-react';
+import { Target, RefreshCw, Play, Briefcase } from 'lucide-react';
 
 export default function CampaignListView({ campaigns, loading, onRefresh, onCreateNew, onViewContacts, onStartCampaign }) {
   const getStatusLabel = (status) => {
@@ -47,14 +47,29 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
           {campaigns.map((campaign) => (
             <div key={campaign.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
               <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-1">{campaign.name}</h3>
-                    <p className="text-sm text-gray-500">Creada: {campaign.created}</p>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <h3 className="text-lg font-semibold text-gray-800 leading-tight">{campaign.name}</h3>
+                    <p className={`text-sm font-medium mt-0.5 ${campaign.title ? 'text-blue-600' : 'text-gray-300 italic'}`}>
+                      {campaign.title || 'Sin título'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Creada: {campaign.created}</p>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(campaign.status)}`}>
                     {getStatusLabel(campaign.status)}
                   </span>
+                </div>
+
+                <div className="mb-3 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Briefcase className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                    <span className={campaign.projectName ? 'font-medium text-gray-600' : 'text-gray-300 italic'}>
+                      {campaign.projectName || 'Sin proyecto asociado'}
+                    </span>
+                  </div>
+                  <p className={`text-xs line-clamp-2 leading-relaxed ${campaign.description ? 'text-gray-500' : 'text-gray-300 italic'}`}>
+                    {campaign.description || 'Sin descripción'}
+                  </p>
                 </div>
 
                 <div className="space-y-3 mb-4">

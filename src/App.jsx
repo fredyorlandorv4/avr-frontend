@@ -15,6 +15,7 @@ import CampaignListView from './components/CampaignListView.jsx';
 import CreateCampaignView from './components/CreateCampaignView.jsx';
 import CampaignContactsView from './components/CampaignContactsView.jsx';
 import FollowUpsView from './components/FollowUpsView.jsx';
+import ProjectsView from './components/ProjectsView.jsx';
 
 const TAB_LABELS = {
   dashboard: 'Dashboard',
@@ -22,6 +23,7 @@ const TAB_LABELS = {
   reports:   'Reportes',
   campaigns: 'Campañas',
   followups: 'Follow Ups',
+  projects:  'Proyectos',
   users:     'Usuarios',
   settings:  'Configuración',
 };
@@ -62,9 +64,9 @@ export default function App() {
 
   // --- Data loaders ---
 
-  const loadCalls = useCallback(async () => {
+  const loadCalls = useCallback(async ({ silent = false } = {}) => {
     if (!authToken) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await apiFetch('/api/v1/calls/admin/all?skip=0&limit=100', {
         token: authToken,
@@ -88,7 +90,7 @@ export default function App() {
     } catch (err) {
       if (err.message !== 'Unauthorized') console.error('Error loading calls:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [authToken, logout]);
 
@@ -102,13 +104,16 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setCampaigns(data.map(c => ({
-          id:        c.id,
-          name:      c.name,
-          status:    c.status,
-          contacts:  c.total_contacts || 0,
-          completed: c.called_contacts || 0,
-          pending:   Math.max(0, (c.total_contacts || 0) - (c.called_contacts || 0)),
-          created:   c.created_at ? new Date(c.created_at).toLocaleDateString('es-GT') : '-',
+          id:          c.id,
+          name:        c.name,
+          title:       c.title       || '',
+          description: c.description || '',
+          projectName: c.project_name || c.project?.name || '',
+          status:      c.status,
+          contacts:    c.total_contacts  || 0,
+          completed:   c.called_contacts || 0,
+          pending:     Math.max(0, (c.total_contacts || 0) - (c.called_contacts || 0)),
+          created:     c.created_at ? new Date(c.created_at).toLocaleDateString('es-GT') : '-',
         })));
       }
     } catch (err) {
@@ -239,7 +244,7 @@ export default function App() {
     loadFollowUps();
     loadFollowUpStats();
     const interval = setInterval(() => {
-      loadCalls();
+      loadCalls({ silent: true });   // sin spinner — refresco en segundo plano
       loadCampaigns();
       loadFollowUps();
       loadFollowUpStats();
@@ -435,6 +440,10 @@ export default function App() {
                   showToast('Follow-ups actualizados', 'success');
                 }}
               />
+            )}
+
+            {activeTab === 'projects' && (
+              <ProjectsView />
             )}
 
             {activeTab === 'users' && (
