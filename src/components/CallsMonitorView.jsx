@@ -2,11 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import { Phone, FileText, BarChart3, RefreshCw, Search, X, Headphones, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-// ─────────────────────────────────────────────────────────────
-// TODO: cuando el endpoint esté listo, actualiza esta función
-// Ejemplo real: `/api/v1/calls/${callId}/recording`
-// ─────────────────────────────────────────────────────────────
-const getRecordingUrl = (callId) => `/api/v1/calls/${callId}/recording`;
+const getRecordingUrl = (callId) => `/api/v1/calls/${callId}/recording/download`;
 
 // Solo mostramos el botón en llamadas que podrían tener grabación
 const RECORDABLE_STATUSES = ['completed', 'answered'];
@@ -118,7 +114,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
 
     try {
       const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${BASE}${getRecordingUrl(call.call_id || id)}`, {
+      const res = await fetch(`${BASE}${getRecordingUrl(id)}`, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
 
