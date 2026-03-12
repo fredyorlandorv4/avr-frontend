@@ -1,71 +1,70 @@
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Phone, PhoneCall, PhoneOff, Clock, Users, TrendingUp, Activity, Bell, Settings, LogOut, Menu, X, Play, FileText, BarChart3, Target, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Phone, Bell, LogOut, Menu, X, BarChart3, Users, Settings } from 'lucide-react';
 
-const AVRSystem = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+import { useAuth } from './context/AuthContext.jsx';
+import { apiFetch } from './api.js';
+
+import LoginPage from './components/LoginPage.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import Toast from './components/Toast.jsx';
+import TranscriptionModal from './components/TranscriptionModal.jsx';
+import AnalysisModal from './components/AnalysisModal.jsx';
+import DashboardView from './components/DashboardView.jsx';
+import CallsMonitorView from './components/CallsMonitorView.jsx';
+import CampaignListView from './components/CampaignListView.jsx';
+import CreateCampaignView from './components/CreateCampaignView.jsx';
+import CampaignContactsView from './components/CampaignContactsView.jsx';
+import FollowUpsView from './components/FollowUpsView.jsx';
+import ProjectsView from './components/ProjectsView.jsx';
+
+const TAB_LABELS = {
+  dashboard: 'Dashboard',
+  calls:     'Monitor de Llamadas',
+  reports:   'Reportes',
+  campaigns: 'Campañas',
+  followups: 'Follow Ups',
+  projects:  'Proyectos',
+  users:     'Usuarios',
+  settings:  'Configuración',
+};
+
+export default function App() {
+  const { authToken, isLoggedIn, logout } = useAuth();
+
+  // Navigation
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [campaignView, setCampaignView] = useState('list');
   const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [authToken, setAuthToken] = useState(null);
-  const [loginError, setLoginError] = useState('');
 
-  const [calls, setCalls] = useState([]);
-  const [stats, setStats] = useState({
-    active: 0,
-    completed: 0,
-    pending: 0,
-    failed: 0,
-    avgDuration: 0
-  });
-
+  // Global UI
+  const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-
-  const [showTranscriptionModal, setShowTranscriptionModal] = useState(false);
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-  const [selectedCall, setSelectedCallModal] = useState(null);
-
-  const [campaigns, setCampaigns] = useState([]);
-  const [campaignContacts, setCampaignContacts] = useState([]);
-
   const [toast, setToast] = useState({ show: false, message: '', type: '' });
 
-  // Follow-ups state
+  // Modal state
+  const [showTranscriptionModal, setShowTranscriptionModal] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [selectedCall, setSelectedCall] = useState(null);
+
+  // Data
+  const [calls, setCalls] = useState([]);
+  const [stats, setStats] = useState({ active: 0, completed: 0, pending: 0, failed: 0, avgDuration: 0 });
+  const [campaigns, setCampaigns] = useState([]);
+  const [campaignContacts, setCampaignContacts] = useState([]);
   const [followUps, setFollowUps] = useState([]);
-  const [followUpStats, setFollowUpStats] = useState({
-    total: 0,
-    green: 0,
-    orange: 0,
-    red: 0,
-    completed: 0
-  });
+  const [followUpStats, setFollowUpStats] = useState({ total: 0, green: 0, orange: 0, red: 0, completed: 0 });
 
-  const callsByHour = [
-    { hour: '08:00', calls: 12 },
-    { hour: '10:00', calls: 25 },
-    { hour: '12:00', calls: 18 },
-    { hour: '14:00', calls: 30 },
-    { hour: '16:00', calls: 22 },
-    { hour: '18:00', calls: 15 },
-  ];
+  // --- Helpers ---
 
-  const callsByStatus = [
-    { name: 'Completadas', value: 145, color: '#10b981' },
-    { name: 'Fallidas', value: 23, color: '#ef4444' },
-    { name: 'Sin respuesta', value: 12, color: '#f59e0b' },
-    { name: 'Ocupado', value: 8, color: '#6366f1' },
-  ];
+  const showToast = useCallback((message, type) => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: '' }), 4000);
+  }, []);
 
-  const handleLogin = async () => {
-    if (!username || !password) {
-      setLoginError('Por favor ingresa usuario y contraseña');
-      return;
-    }
+  // --- Data loaders ---
 
+<<<<<<< HEAD
     setLoading(true);
     setLoginError('');
 
@@ -119,360 +118,274 @@ const AVRSystem = () => {
   };
 
   const loadCalls = async () => {
+=======
+  const loadCalls = useCallback(async ({ silent = false } = {}) => {
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
     if (!authToken) return;
-
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
+<<<<<<< HEAD
       const response = await fetch('http://10.10.1.26:8000/api/v1/calls/admin/all?skip=0&limit=100', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
+=======
+      const res = await apiFetch('/api/v1/calls/admin/all?skip=0&limit=100', {
+        token: authToken,
+        onUnauthorized: logout,
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
       });
-
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = await res.json();
         setCalls(data);
 
-        const activeCount = data.filter(c => c.status === 'ringing' || c.status === 'active').length;
-        const completedCount = data.filter(c => c.status === 'completed' || c.status === 'answered').length;
-        const pendingCount = data.filter(c => c.status === 'pending').length;
-        const failedCount = data.filter(c => c.status === 'failed' || c.status === 'no-answer' || c.status === 'busy').length;
-
-        const callsWithDuration = data.filter(c => c.duration !== null && c.duration > 0);
-        const avgDur = callsWithDuration.length > 0 
-          ? Math.round(callsWithDuration.reduce((acc, c) => acc + c.duration, 0) / callsWithDuration.length)
+        const active    = data.filter(c => c.status === 'ringing' || c.status === 'active').length;
+        const completed = data.filter(c => c.status === 'completed' || c.status === 'answered').length;
+        const pending   = data.filter(c => c.status === 'pending').length;
+        const failed    = data.filter(c => c.status === 'failed' || c.status === 'no-answer' || c.status === 'busy').length;
+        const withDur   = data.filter(c => c.duration != null && c.duration > 0);
+        const avgDuration = withDur.length > 0
+          ? Math.round(withDur.reduce((acc, c) => acc + c.duration, 0) / withDur.length)
           : 0;
 
-        setStats({
-          active: activeCount,
-          completed: completedCount,
-          pending: pendingCount,
-          failed: failedCount,
-          avgDuration: avgDur
-        });
+        setStats({ active, completed, pending, failed, avgDuration });
       }
-    } catch (error) {
-      console.error('Error loading calls:', error);
+    } catch (err) {
+      if (err.message !== 'Unauthorized') console.error('Error loading calls:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [authToken, logout]);
 
-  const loadCampaigns = async () => {
+  const loadCampaigns = useCallback(async () => {
     if (!authToken) return;
-
     try {
+<<<<<<< HEAD
       const response = await fetch('http://10.10.1.26:8000/api/v1/campaigns?skip=0&limit=100', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
+=======
+      const res = await apiFetch('/api/v1/campaigns?skip=0&limit=100', {
+        token: authToken,
+        onUnauthorized: logout,
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
       });
-
-      if (response.ok) {
-        const data = await response.json();
-
-        const mappedCampaigns = data.map(campaign => ({
-          id: campaign.id,
-          name: campaign.name,
-          status: campaign.status,
-          contacts: campaign.total_contacts || 0,
-          completed: campaign.called_contacts || 0,
-          pending: Math.max(0, (campaign.total_contacts || 0) - (campaign.called_contacts || 0)),
-          created: campaign.created_at ? new Date(campaign.created_at).toLocaleDateString('es-GT') : '-'
-        }));
-
-        setCampaigns(mappedCampaigns);
+      if (res.ok) {
+        const data = await res.json();
+        setCampaigns(data.map(c => ({
+          id:          c.id,
+          name:        c.name,
+          title:       c.title       || '',
+          description: c.description || '',
+          projectName: c.project_name || c.project?.name || '',
+          status:      c.status,
+          contacts:    c.total_contacts  || 0,
+          completed:   c.called_contacts || 0,
+          pending:     Math.max(0, (c.total_contacts || 0) - (c.called_contacts || 0)),
+          created:     c.created_at ? new Date(c.created_at).toLocaleDateString('es-GT') : '-',
+        })));
       }
-    } catch (error) {
-      console.error('Error loading campaigns:', error);
+    } catch (err) {
+      if (err.message !== 'Unauthorized') console.error('Error loading campaigns:', err);
     }
-  };
+  }, [authToken, logout]);
 
-  const loadCampaignContacts = async (campaignId) => {
+  const loadCampaignContacts = useCallback(async (campaignId) => {
     if (!authToken || !campaignId) return;
-
     setLoading(true);
     try {
+<<<<<<< HEAD
       const response = await fetch(`http://10.10.1.26:8000/api/v1/campaigns/contacts_by_campaing/${campaignId}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
+=======
+      const res = await apiFetch(`/api/v1/campaigns/contacts_by_campaing/${campaignId}`, {
+        token: authToken,
+        onUnauthorized: logout,
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
       });
-
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = await res.json();
         setCampaignContacts(data.contacts || []);
       }
-    } catch (error) {
-      console.error('Error loading campaign contacts:', error);
+    } catch (err) {
+      if (err.message !== 'Unauthorized') console.error('Error loading campaign contacts:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [authToken, logout]);
 
-  // Load follow-ups from backend
-  const loadFollowUps = async () => {
+  const loadFollowUps = useCallback(async () => {
     if (!authToken) return;
-
     try {
+<<<<<<< HEAD
       const response = await fetch('http://10.10.1.26:8000/api/v1/follow-ups?skip=0&limit=100', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
+=======
+      const res = await apiFetch('/api/v1/follow-ups?skip=0&limit=100', {
+        token: authToken,
+        onUnauthorized: logout,
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setFollowUps(data);
-      } else {
-        console.error('Error loading follow-ups:', response.status);
-      }
-    } catch (error) {
-      console.error('Error loading follow-ups:', error);
+      if (res.ok) setFollowUps(await res.json());
+    } catch (err) {
+      if (err.message !== 'Unauthorized') console.error('Error loading follow-ups:', err);
     }
-  };
+  }, [authToken, logout]);
 
-  // Load follow-up stats
-  const loadFollowUpStats = async () => {
+  const loadFollowUpStats = useCallback(async () => {
     if (!authToken) return;
-
     try {
+<<<<<<< HEAD
       const response = await fetch('http://10.10.1.26:8000/api/v1/follow-ups/stats', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
+=======
+      const res = await apiFetch('/api/v1/follow-ups/stats', {
+        token: authToken,
+        onUnauthorized: logout,
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setFollowUpStats(data);
-      } else {
-        console.error('Error loading follow-up stats:', response.status);
-      }
-    } catch (error) {
-      console.error('Error loading follow-up stats:', error);
+      if (res.ok) setFollowUpStats(await res.json());
+    } catch (err) {
+      if (err.message !== 'Unauthorized') console.error('Error loading follow-up stats:', err);
     }
-  };
+  }, [authToken, logout]);
 
-  const startCampaign = async (campaignId, campaignName) => {
+  const startCampaign = useCallback(async (campaignId, campaignName) => {
     if (!authToken || !campaignId) return;
-
     setLoading(true);
     try {
+<<<<<<< HEAD
       const response = await fetch(`http://10.10.1.26:8000/api/v1/campaigns/campaigns/${campaignId}/start-queue`, {
+=======
+      const res = await apiFetch(`/api/v1/campaigns/${campaignId}/start`, {
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: ''
+        token: authToken,
+        onUnauthorized: logout,
       });
-
-      if (response.ok) {
-        const data = await response.json();
-
-        const statusMessages = {
-          'active': 'activa y en ejecución',
-          'completed': 'completada',
-          'paused': 'pausada',
-          'created': 'creada'
-        };
-
-        const statusMessage = statusMessages[data.status] || data.status;
-
-        showToast(`¡Campaña "${campaignName}" iniciada exitosamente! Estado: ${statusMessage}`, 'success');
-
+      if (res.ok) {
+        const data = await res.json();
+        const statusMessages = { active: 'activa y en ejecución', completed: 'completada', paused: 'pausada', created: 'creada' };
+        showToast(`¡Campaña "${campaignName}" iniciada! Estado: ${statusMessages[data.status] || data.status}`, 'success');
         await loadCampaigns();
       } else {
-        const errorData = await response.json();
-        showToast(errorData.detail || 'Error al iniciar la campaña', 'error');
+        const errData = await res.json();
+        showToast(errData.detail || 'Error al iniciar la campaña', 'error');
       }
-    } catch (error) {
-      console.error('Error starting campaign:', error);
-      showToast('Error de conexión al iniciar la campaña', 'error');
+    } catch (err) {
+      if (err.message !== 'Unauthorized') showToast('Error de conexión al iniciar la campaña', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [authToken, logout, loadCampaigns, showToast]);
 
-  const showToast = (message, type) => {
-    setToast({ show: true, message, type });
-    setTimeout(() => {
-      setToast({ show: false, message: '', type: '' });
-    }, 4000);
-  };
-
-  // Toggle follow-up completion with backend integration
-  const toggleFollowUpCompletion = async (followUpId) => {
+  const toggleFollowUpCompletion = useCallback(async (followUpId) => {
     const followUp = followUps.find(fu => fu.id === followUpId);
     if (!followUp) return;
 
     const previousState = followUp.completed;
 
-    // Actualización optimista del UI
-    setFollowUps(prevFollowUps => 
-      prevFollowUps.map(fu => {
-        if (fu.id === followUpId) {
-          const newCompleted = !fu.completed;
-          return {
-            ...fu,
-            completed: newCompleted,
-            completed_at: newCompleted ? new Date().toISOString() : null
-          };
-        }
-        return fu;
-      })
-    );
+    // Optimistic update
+    setFollowUps(prev => prev.map(fu => fu.id === followUpId
+      ? { ...fu, completed: !fu.completed, completed_at: !fu.completed ? new Date().toISOString() : null }
+      : fu
+    ));
 
-    // Mostrar toast inmediatamente
-    showToast(
-      previousState 
-        ? `Follow-up marcado como pendiente` 
-        : `✓ Follow-up completado`,
-      previousState ? 'info' : 'success'
-    );
+    showToast(previousState ? 'Follow-up marcado como pendiente' : '✓ Follow-up completado', previousState ? 'info' : 'success');
 
-    // Actualizar en el backend
     try {
+<<<<<<< HEAD
       const response = await fetch(`http://10.10.1.26:8000/api/v1/follow-ups/${followUpId}/complete`, {
+=======
+      const res = await apiFetch(`/api/v1/follow-ups/${followUpId}/complete`, {
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json'
-        }
+        token: authToken,
+        onUnauthorized: logout,
       });
 
-      if (!response.ok) {
-        // Si falla, revertir el cambio
-        setFollowUps(prevFollowUps => 
-          prevFollowUps.map(fu => {
-            if (fu.id === followUpId) {
-              return {
-                ...fu,
-                completed: previousState,
-                completed_at: previousState ? followUp.completed_at : null
-              };
-            }
-            return fu;
-          })
-        );
+      if (!res.ok) {
+        // Rollback
+        setFollowUps(prev => prev.map(fu => fu.id === followUpId
+          ? { ...fu, completed: previousState, completed_at: previousState ? followUp.completed_at : null }
+          : fu
+        ));
         showToast('Error al actualizar el follow-up', 'error');
       } else {
-        // Recargar para asegurar sincronización
         await loadFollowUps();
         await loadFollowUpStats();
       }
-    } catch (error) {
-      console.error('Error toggling follow-up:', error);
-      // Revertir en caso de error de red
-      setFollowUps(prevFollowUps => 
-        prevFollowUps.map(fu => {
-          if (fu.id === followUpId) {
-            return {
-              ...fu,
-              completed: previousState,
-              completed_at: previousState ? followUp.completed_at : null
-            };
-          }
-          return fu;
-        })
-      );
-      showToast('Error de conexión al actualizar el follow-up', 'error');
+    } catch (err) {
+      if (err.message !== 'Unauthorized') {
+        setFollowUps(prev => prev.map(fu => fu.id === followUpId
+          ? { ...fu, completed: previousState, completed_at: previousState ? followUp.completed_at : null }
+          : fu
+        ));
+        showToast('Error de conexión al actualizar el follow-up', 'error');
+      }
     }
-  };
+  }, [authToken, logout, followUps, loadFollowUps, loadFollowUpStats, showToast]);
 
-  // Verificar si hay token guardado al cargar la aplicación
-  useEffect(() => {
-    const savedToken = localStorage.getItem('authToken');
-    const savedUsername = localStorage.getItem('username');
-    
-    if (savedToken && savedUsername) {
-      setAuthToken(savedToken);
-      setUsername(savedUsername);
-      setIsLoggedIn(true);
-    }
-  }, []);
+  // --- Effects ---
 
+  // Initial data load + 30s polling
   useEffect(() => {
-    if (isLoggedIn && authToken) {
-      loadCalls();
+    if (!isLoggedIn || !authToken) return;
+    loadCalls();
+    loadCampaigns();
+    loadFollowUps();
+    loadFollowUpStats();
+    const interval = setInterval(() => {
+      loadCalls({ silent: true });   // sin spinner — refresco en segundo plano
       loadCampaigns();
       loadFollowUps();
       loadFollowUpStats();
-      const interval = setInterval(() => {
-        loadCalls();
-        loadCampaigns();
-        loadFollowUps();
-        loadFollowUpStats();
-      }, 30000);
-      return () => clearInterval(interval);
-    }
+    }, 30000);
+    return () => clearInterval(interval);
   }, [isLoggedIn, authToken]);
 
+  // Load contacts when selected campaign changes
   useEffect(() => {
-    if (selectedCampaign && selectedCampaign.id && authToken) {
+    if (selectedCampaign?.id && authToken) {
       loadCampaignContacts(selectedCampaign.id);
     }
-  }, [selectedCampaign]);
+  }, [selectedCampaign?.id]);
 
+  // Mobile detection
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
     const onChange = (e) => setIsMobile(e.matches);
-
     setIsMobile(mq.matches);
-
-    if (mq.addEventListener) mq.addEventListener('change', onChange);
-    else mq.addListener(onChange);
-
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
-      else mq.removeListener(onChange);
-    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  const closeSidebarOnMobile = () => {
-    if (window.innerWidth < 1024) {
-      setSidebarOpen(false);
-    }
+  // --- Handlers ---
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'campaigns') setCampaignView('list');
+    if (window.innerWidth < 1024) setSidebarOpen(false);
   };
 
-  const TranscriptionModal = () => {
-    if (!showTranscriptionModal || !selectedCall) return null;
+  const openAnalysis = (call) => { setSelectedCall(call); setShowAnalysisModal(true); };
+  const openTranscription = (call) => { setSelectedCall(call); setShowTranscriptionModal(true); };
 
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={() => setShowTranscriptionModal(false)}>
-        <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div>
-              <h3 className="text-xl font-bold text-gray-800">Transcripción de Llamada</h3>
-              <p className="text-sm text-gray-500 mt-1">ID: {selectedCall.call_id}</p>
-            </div>
-            <button onClick={() => setShowTranscriptionModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition">
-              <X className="w-6 h-6 text-gray-600" />
-            </button>
-          </div>
-          <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
-            {selectedCall.transcription ? (
-              <div className="prose max-w-none">
-                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{selectedCall.transcription}</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12">
-                <RefreshCw className="w-12 h-12 text-gray-400 animate-spin mb-4" />
-                <p className="text-gray-500">Cargando transcripción...</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // --- Render ---
 
+<<<<<<< HEAD
   const Toast = () => {
     if (!toast.show) return null;
 
@@ -1985,13 +1898,30 @@ const AVRSystem = () => {
       </div>
     );
   };
+=======
+  if (!isLoggedIn) return <LoginPage />;
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <TranscriptionModal />
-      <AnalysisModal />
-      <Toast />
+      <TranscriptionModal
+        show={showTranscriptionModal}
+        call={selectedCall}
+        onClose={() => setShowTranscriptionModal(false)}
+      />
+      <AnalysisModal
+        show={showAnalysisModal}
+        call={selectedCall}
+        onClose={() => setShowAnalysisModal(false)}
+      />
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onDismiss={() => setToast({ show: false, message: '', type: '' })}
+      />
 
+      {/* Mobile header */}
       <header className="lg:hidden bg-white shadow-sm border-b sticky top-0 z-30 w-full">
         <div className="w-full flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-4">
@@ -2009,14 +1939,13 @@ const AVRSystem = () => {
               </div>
             </div>
           </div>
-
           <div className="flex items-center gap-2 sm:gap-4">
             <button className="relative p-2 hover:bg-gray-100 rounded-lg transition">
               <Bell className="w-6 h-6 text-gray-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
             </button>
             <button
-              onClick={handleLogout}
+              onClick={logout}
               className="flex items-center gap-2 px-3 sm:px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
             >
               <LogOut className="w-5 h-5" />
@@ -2027,145 +1956,55 @@ const AVRSystem = () => {
       </header>
 
       <div className="lg:flex">
-        {sidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          ></div>
-        )}
-
-        <aside className={`${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 fixed lg:static top-0 left-0 h-screen w-64 bg-white border-r shadow-lg lg:shadow-none transition-transform duration-300 z-30 overflow-y-auto overscroll-contain`}>
-          <div className="hidden lg:flex items-center gap-2 p-6 border-b">
-            <Phone className="w-8 h-8 text-blue-600 flex-shrink-0" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">AVR System</h1>
-              <p className="text-xs text-gray-500">Agent Voice Response</p>
-            </div>
-          </div>
-
-          <nav className="p-4 space-y-2 lg:pt-0 pt-20 pb-8">
-            <button
-              onClick={() => {
-                setActiveTab('dashboard');
-                closeSidebarOnMobile();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                activeTab === 'dashboard' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Activity className="w-5 h-5 flex-shrink-0" />
-              Dashboard
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('calls');
-                closeSidebarOnMobile();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                activeTab === 'calls' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Phone className="w-5 h-5 flex-shrink-0" />
-              Monitor de Llamadas
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('reports');
-                closeSidebarOnMobile();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                activeTab === 'reports' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <BarChart3 className="w-5 h-5 flex-shrink-0" />
-              Reportes
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('campaigns');
-                setCampaignView('list');
-                closeSidebarOnMobile();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                activeTab === 'campaigns' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Target className="w-5 h-5 flex-shrink-0" />
-              Campañas
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('followups');
-                closeSidebarOnMobile();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                activeTab === 'followups' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Clock className="w-5 h-5 flex-shrink-0" />
-              Follow Ups
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('users');
-                closeSidebarOnMobile();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                activeTab === 'users' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Users className="w-5 h-5 flex-shrink-0" />
-              Usuarios
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('settings');
-                closeSidebarOnMobile();
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                activeTab === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Settings className="w-5 h-5 flex-shrink-0" />
-              Configuración
-            </button>
-          </nav>
-        </aside>
+        <Sidebar
+          activeTab={activeTab}
+          sidebarOpen={sidebarOpen}
+          onTabChange={handleTabChange}
+          onClose={() => setSidebarOpen(false)}
+        />
 
         <div className="flex-1 min-h-screen">
+          {/* Desktop header */}
           <header className="hidden lg:block bg-white shadow-sm border-b">
             <div className="flex items-center justify-between px-4 lg:px-8 py-4">
-              <h2 className="text-2xl font-bold text-gray-800">
-                {activeTab === 'dashboard' && 'Dashboard'}
-                {activeTab === 'calls' && 'Monitor de Llamadas'}
-                {activeTab === 'reports' && 'Reportes'}
-                {activeTab === 'campaigns' && 'Campañas'}
-                {activeTab === 'followups' && 'Follow Ups'}
-                {activeTab === 'users' && 'Usuarios'}
-                {activeTab === 'settings' && 'Configuración'}
-              </h2>
-
+              <h2 className="text-2xl font-bold text-gray-800">{TAB_LABELS[activeTab] || activeTab}</h2>
               <div className="flex items-center gap-4">
                 <button className="relative p-2 hover:bg-gray-100 rounded-lg transition">
                   <Bell className="w-6 h-6 text-gray-600" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
                 </button>
                 <button
-                  onClick={handleLogout}
+                  onClick={logout}
                   className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                 >
                   <LogOut className="w-5 h-5" />
-                  <span>Salir</span>
+                  Salir
                 </button>
               </div>
             </div>
           </header>
 
           <main className="p-4 lg:p-8 bg-gray-50 min-h-screen">
-            {activeTab === 'dashboard' && <DashboardView />}
-            {activeTab === 'calls' && <CallsMonitorView />}
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                calls={calls}
+                stats={stats}
+                isMobile={isMobile}
+                onRefresh={loadCalls}
+                onViewCallAnalysis={openAnalysis}
+              />
+            )}
+
+            {activeTab === 'calls' && (
+              <CallsMonitorView
+                calls={calls}
+                loading={loading}
+                onRefresh={loadCalls}
+                onViewTranscription={openTranscription}
+                onViewAnalysis={openAnalysis}
+              />
+            )}
+
             {activeTab === 'reports' && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
@@ -2175,14 +2014,57 @@ const AVRSystem = () => {
                 </div>
               </div>
             )}
+
             {activeTab === 'campaigns' && (
               <>
-                {campaignView === 'list' && <CampaignListView />}
-                {campaignView === 'create' && <CreateCampaignView />}
-                {campaignView === 'contacts' && <CampaignContactsView />}
+                {campaignView === 'list' && (
+                  <CampaignListView
+                    campaigns={campaigns}
+                    loading={loading}
+                    onRefresh={loadCampaigns}
+                    onCreateNew={() => setCampaignView('create')}
+                    onViewContacts={(campaign) => { setSelectedCampaign(campaign); setCampaignView('contacts'); }}
+                    onStartCampaign={startCampaign}
+                  />
+                )}
+                {campaignView === 'create' && (
+                  <CreateCampaignView
+                    onCancel={() => setCampaignView('list')}
+                    onSuccess={() => { loadCampaigns(); setCampaignView('list'); }}
+                  />
+                )}
+                {campaignView === 'contacts' && (
+                  <CampaignContactsView
+                    campaign={selectedCampaign}
+                    contacts={campaignContacts}
+                    calls={calls}
+                    loading={loading}
+                    onBack={() => { setCampaignView('list'); setSelectedCampaign(null); }}
+                    onRefresh={() => loadCampaignContacts(selectedCampaign.id)}
+                    onViewCallAnalysis={openAnalysis}
+                  />
+                )}
               </>
             )}
-            {activeTab === 'followups' && <FollowUpsView />}
+
+            {activeTab === 'followups' && (
+              <FollowUpsView
+                followUps={followUps}
+                followUpStats={followUpStats}
+                isMobile={isMobile}
+                onToggleComplete={toggleFollowUpCompletion}
+                onRefresh={() => {
+                  loadFollowUps();
+                  loadFollowUpStats();
+                  showToast('Follow-ups actualizados', 'success');
+                }}
+              />
+            )}
+
+            {activeTab === 'projects' && (
+              <ProjectsView />
+            )}
+
             {activeTab === 'users' && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
@@ -2192,6 +2074,7 @@ const AVRSystem = () => {
                 </div>
               </div>
             )}
+
             {activeTab === 'settings' && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
@@ -2206,6 +2089,10 @@ const AVRSystem = () => {
       </div>
     </div>
   );
+<<<<<<< HEAD
 };
 
 export default AVRSystem;
+=======
+}
+>>>>>>> 2b92b7333ae3326bb13f21dc4917f2ba78951cc5
