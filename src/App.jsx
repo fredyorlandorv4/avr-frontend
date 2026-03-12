@@ -70,7 +70,7 @@ const AVRSystem = () => {
     setLoginError('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+      const response = await fetch('http://10.10.1.26:8000/api/v1/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ const AVRSystem = () => {
       }
     } catch (error) {
       console.error('Error de conexión:', error);
-      setLoginError('Error de conexión. Verifica que la API esté corriendo en http://localhost:8000');
+      setLoginError('Error de conexión. Verifica que la API esté corriendo en http://10.10.1.26:8000');
     } finally {
       setLoading(false);
     }
@@ -123,7 +123,7 @@ const AVRSystem = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/calls/admin/all?skip=0&limit=100', {
+      const response = await fetch('http://10.10.1.26:8000/api/v1/calls/admin/all?skip=0&limit=100', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
@@ -163,7 +163,7 @@ const AVRSystem = () => {
     if (!authToken) return;
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/campaigns?skip=0&limit=100', {
+      const response = await fetch('http://10.10.1.26:8000/api/v1/campaigns?skip=0&limit=100', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
@@ -195,7 +195,7 @@ const AVRSystem = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/campaigns/contacts_by_campaing/${campaignId}`, {
+      const response = await fetch(`http://10.10.1.26:8000/api/v1/campaigns/contacts_by_campaing/${campaignId}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
@@ -218,7 +218,7 @@ const AVRSystem = () => {
     if (!authToken) return;
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/follow-ups?skip=0&limit=100', {
+      const response = await fetch('http://10.10.1.26:8000/api/v1/follow-ups?skip=0&limit=100', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
@@ -241,7 +241,7 @@ const AVRSystem = () => {
     if (!authToken) return;
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/follow-ups/stats', {
+      const response = await fetch('http://10.10.1.26:8000/api/v1/follow-ups/stats', {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
@@ -264,7 +264,7 @@ const AVRSystem = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/campaigns/${campaignId}/start`, {
+      const response = await fetch(`http://10.10.1.26:8000/api/v1/campaigns/campaigns/${campaignId}/start-queue`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -339,7 +339,7 @@ const AVRSystem = () => {
 
     // Actualizar en el backend
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/follow-ups/${followUpId}/complete`, {
+      const response = await fetch(`http://10.10.1.26:8000/api/v1/follow-ups/${followUpId}/complete`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${authToken}`,
@@ -1230,7 +1230,7 @@ const AVRSystem = () => {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        const response = await fetch(`http://localhost:8000/api/v1/campaigns/upload?campaign_name=${encodeURIComponent(campaignName)}`, {
+        const response = await fetch(`http://10.10.1.26:8000/api/v1/campaigns/upload?campaign_name=${encodeURIComponent(campaignName)}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${authToken}`,
