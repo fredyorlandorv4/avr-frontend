@@ -198,10 +198,10 @@ export default function DashboardView() {
     effective:      kpis.effective     ?? 0,
     ineffective:    kpis.ineffective   ?? 0,
     efficiencyPct:  kpis.efficiency_pct?? kpis.efficiencyPct?? 0,
-    minDuration:    kpis.min_duration  ?? kpis.minDuration  ?? 0,
-    maxDuration:    kpis.max_duration  ?? kpis.maxDuration  ?? 0,
-    medianDuration: kpis.median_duration ?? kpis.medianDuration ?? 0,
-    avgDuration:    kpis.avg_duration  ?? kpis.avgDuration  ?? 0,
+    minDuration:    kpis.min_duration_sec    ?? kpis.min_duration    ?? kpis.minDuration    ?? 0,
+    maxDuration:    kpis.max_duration_sec    ?? kpis.max_duration    ?? kpis.maxDuration    ?? 0,
+    medianDuration: kpis.median_duration_sec ?? kpis.median_duration ?? kpis.medianDuration ?? 0,
+    avgDuration:    kpis.avg_duration_sec    ?? kpis.avg_duration    ?? kpis.avgDuration    ?? 0,
   } : null;
 
   // Normalizar duration buckets (is_effective o isEffective)
