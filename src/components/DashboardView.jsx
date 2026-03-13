@@ -81,7 +81,7 @@ function AgentTable({ agents }) {
             const barColor = pct >= 75 ? C.effective : pct >= 40 ? C.amber : C.ineffective;
             return (
               <tr key={a.user_id ?? i}>
-                <td style={{ ...td, fontWeight: 500 }}>{a.name ?? a.full_name ?? `Agente ${a.user_id}`}</td>
+                <td style={{ ...td, fontWeight: 500 }}>{a.agent_name ?? a.name ?? a.full_name ?? `Agente ${a.user_id}`}</td>
                 <td style={td}>{a.total_calls ?? a.totalCalls ?? 0}</td>
                 <td style={td}>{a.effective ?? 0}</td>
                 <td style={td}>
@@ -175,7 +175,7 @@ export default function DashboardView() {
   // Agent list for user_id dropdown — derived from agentStats
   const agentOptions = useMemo(() => agentStats.map(a => ({
     id:   a.user_id,
-    name: a.name ?? a.full_name ?? `Agente ${a.user_id}`,
+    name: a.agent_name ?? a.name ?? a.full_name ?? `Agente ${a.user_id}`,
   })), [agentStats]);
 
   const handleFilterChange = (key, val) => {
