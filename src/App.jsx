@@ -372,10 +372,9 @@ export default function App() {
             {activeTab === 'dashboard' && (
               <DashboardView
                 calls={calls}
-                stats={stats}
-                isMobile={isMobile}
+                campaigns={campaigns}
+                followUps={followUps}
                 onRefresh={loadCalls}
-                onViewCallAnalysis={openAnalysis}
               />
             )}
 
