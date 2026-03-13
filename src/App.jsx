@@ -131,7 +131,10 @@ export default function App() {
       });
       if (res.ok) {
         const data = await res.json();
-        setCampaignContacts(data.contacts || []);
+        const contacts = Array.isArray(data)
+          ? data
+          : (data.contacts || data.items || data.results || data.data || []);
+        setCampaignContacts(contacts);
       }
     } catch (err) {
       if (err.message !== 'Unauthorized') console.error('Error loading campaign contacts:', err);
