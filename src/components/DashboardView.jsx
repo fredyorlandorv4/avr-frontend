@@ -69,7 +69,7 @@ function AgentTable({ agents }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr>
-            {['Agente','Llamadas','Efectivas','Eficiencia','Dur. Mín','Dur. Máx','Mediana','Promedio','Estado'].map(h => (
+            {['Agente','Llamadas','Efectivas','Eficiencia','Dur. Mín','Dur. Máx','Mediana','Estado'].map(h => (
               <th key={h} style={th}>{h}</th>
             ))}
           </tr>
@@ -92,10 +92,9 @@ function AgentTable({ agents }) {
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{pct}%</span>
                   </div>
                 </td>
-                <td style={{ ...td, color: '#888' }}>{fmtDuration(a.min_duration ?? a.minDuration)}</td>
-                <td style={{ ...td, color: '#888' }}>{fmtDuration(a.max_duration ?? a.maxDuration)}</td>
-                <td style={td}>{fmtDuration(a.median_duration ?? a.medianDuration)}</td>
-                <td style={td}>{fmtDuration(a.avg_duration ?? a.avgDuration)}</td>
+                <td style={{ ...td, color: '#888' }}>{fmtDuration(a.min_duration_sec ?? a.min_duration ?? a.minDuration)}</td>
+                <td style={{ ...td, color: '#888' }}>{fmtDuration(a.max_duration_sec ?? a.max_duration ?? a.maxDuration)}</td>
+                <td style={td}>{fmtDuration(a.median_duration_sec ?? a.median_duration ?? a.medianDuration)}</td>
                 <td style={td}>
                   <span style={{ background: badge.bg, color: badge.color, fontSize: 11, padding: '2px 8px', borderRadius: 3, fontWeight: 500 }}>
                     {badge.label}
