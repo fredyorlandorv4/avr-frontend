@@ -21,6 +21,8 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
   const { authToken, logout } = useAuth();
   const [prompt,    setPrompt]    = useState(null);
   const [template,  setTemplate]  = useState('');
+  const [name,      setName]      = useState('');
+  const [agentType, setAgentType] = useState('');
   const [variables, setVariables] = useState([]);
   const [preview,   setPreview]   = useState('');
   const [saving,    setSaving]    = useState(false);
@@ -73,21 +75,18 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
   };
 
   const handleSave = async () => {
-    if (!template.trim()) {
-      setError('El template no puede estar vacío.');
-      return;
-    }
+    if (!template.trim()) { setError('El template no puede estar vacío.'); return; }
+    if (!promptId && !name.trim()) { setError('El nombre es obligatorio.'); return; }
+    if (!promptId && !agentType.trim()) { setError('El tipo de agente es obligatorio.'); return; }
     setSaving(true);
     setError('');
     try {
+      const body = promptId
+        ? { template }
+        : { name: name.trim(), agent_type: agentType.trim(), template };
       const res = await apiFetch(
         promptId ? `/api/v1/prompts/${promptId}` : '/api/v1/prompts/',
-        {
-          method:         promptId ? 'PUT' : 'POST',
-          token:          authToken,
-          onUnauthorized: logout,
-          body:           promptId ? { template } : { ...prompt, template },
-        }
+        { method: promptId ? 'PUT' : 'POST', token: authToken, onUnauthorized: logout, body }
       );
       if (!res.ok) throw new Error('Error al guardar');
       const saved = await res.json();
@@ -146,6 +145,36 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
           <div style={{ background: '#fff0f0', border: '1px solid #ffaaaa',
             borderRadius: 4, padding: '8px 12px', color: '#cc0000', fontSize: 13 }}>
             {error}
+          </div>
+        )}
+
+        {/* Campos solo visibles al crear un prompt nuevo */}
+        {!promptId && (
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 4 }}>
+                Nombre *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Ej: Agente cobros Guatemala"
+                style={{ width: '100%', padding: '7px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 4 }}>
+                Tipo de agente (agent_type) *
+              </label>
+              <input
+                type="text"
+                value={agentType}
+                onChange={e => setAgentType(e.target.value)}
+                placeholder="Ej: cobros, ventas, soporte"
+                style={{ width: '100%', padding: '7px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' }}
+              />
+            </div>
           </div>
         )}
 
