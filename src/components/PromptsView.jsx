@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 import PromptEditor from './PromptEditor.jsx';
 
@@ -11,25 +12,31 @@ const btnSecondary = {
 };
 
 export default function PromptsView() {
+  const { authToken, logout } = useAuth();
   const [prompts,  setPrompts]  = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [editing,  setEditing]  = useState(null);   // id del prompt en edición (null = lista)
+  const [editing,  setEditing]  = useState(null);
   const [error,    setError]    = useState('');
 
-  const load = () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    apiFetch('/api/v1/prompts/')
-      .then(data => setPrompts(Array.isArray(data) ? data : (data.items || data.results || data.data || [])))
-      .catch(() => setError('Error al cargar los prompts.'))
-      .finally(() => setLoading(false));
-  };
+    try {
+      const res  = await apiFetch('/api/v1/prompts/', { token: authToken, onUnauthorized: logout });
+      const data = await res.json();
+      setPrompts(Array.isArray(data) ? data : (data.items || data.results || data.data || []));
+    } catch (err) {
+      if (err.message !== 'Unauthorized') setError('Error al cargar los prompts.');
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken, logout]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id, name) => {
     if (!window.confirm(`¿Eliminar el prompt "${name}"?`)) return;
     try {
-      await apiFetch(`/api/v1/prompts/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/v1/prompts/${id}`, { method: 'DELETE', token: authToken, onUnauthorized: logout });
       load();
     } catch {
       setError('Error al eliminar el prompt.');
@@ -39,9 +46,10 @@ export default function PromptsView() {
   const handleToggleActive = async (p) => {
     try {
       await apiFetch(`/api/v1/prompts/${p.id}`, {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ active: !p.active }),
+        method:          'PUT',
+        token:           authToken,
+        onUnauthorized:  logout,
+        body:            JSON.stringify({ active: !p.active }),
       });
       load();
     } catch {

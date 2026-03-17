@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 import VariablePalette from './VariablePalette.jsx';
 
@@ -17,6 +18,7 @@ const SAMPLE_DATA = {
 };
 
 export default function PromptEditor({ promptId, onSaved, onCancel }) {
+  const { authToken, logout } = useAuth();
   const [prompt,    setPrompt]    = useState(null);
   const [template,  setTemplate]  = useState('');
   const [variables, setVariables] = useState([]);
@@ -26,21 +28,22 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
   const textareaRef = useRef(null);
 
   useEffect(() => {
+    const opts = { token: authToken, onUnauthorized: logout };
     Promise.all([
-      promptId ? apiFetch(`/api/v1/prompts/${promptId}`) : Promise.resolve(null),
-      apiFetch('/api/v1/prompts/meta/variables'),
-    ]).then(([p, v]) => {
-      const vars = v?.variables || [];
+      promptId ? apiFetch(`/api/v1/prompts/${promptId}`, opts) : Promise.resolve(null),
+      apiFetch('/api/v1/prompts/meta/variables', opts),
+    ]).then(async ([rPrompt, rVars]) => {
+      const vars = rVars ? (await rVars.json()).variables ?? [] : [];
       setVariables(vars);
-      if (p) {
+      if (rPrompt) {
+        const p = await rPrompt.json();
         setPrompt(p);
         setTemplate(p.template || '');
         renderPreview(p.template || '', vars);
       }
     }).catch(() => setError('Error al cargar los datos.'));
-  }, [promptId]);
+  }, [promptId, authToken]);
 
-  // Reemplaza {{variables}} con datos de ejemplo y marca las desconocidas
   const renderPreview = (text, vars = variables) => {
     let result = text;
     Object.entries(SAMPLE_DATA).forEach(([k, v]) => {
@@ -50,7 +53,6 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
     setPreview(result);
   };
 
-  // Insertar variable en la posición del cursor del textarea
   const insertVariable = (varKey) => {
     const el    = textareaRef.current;
     const start = el.selectionStart;
@@ -78,15 +80,17 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      const opts = {
-        method:  promptId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(promptId ? { template } : { ...prompt, template }),
-      };
-      const saved = await apiFetch(
+      const res = await apiFetch(
         promptId ? `/api/v1/prompts/${promptId}` : '/api/v1/prompts/',
-        opts
+        {
+          method:         promptId ? 'PUT' : 'POST',
+          token:          authToken,
+          onUnauthorized: logout,
+          body:           JSON.stringify(promptId ? { template } : { ...prompt, template }),
+        }
       );
+      if (!res.ok) throw new Error('Error al guardar');
+      const saved = await res.json();
       onSaved?.(saved);
     } catch {
       setError('Error al guardar. Intenta de nuevo.');
