@@ -1,4 +1,4 @@
-import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, X, Briefcase } from 'lucide-react';
+import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, X, Briefcase, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const NAV_ITEMS = [
@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { id: 'campaigns', label: 'Campañas',            Icon: Target    },
   { id: 'followups', label: 'Follow Ups',          Icon: Clock     },
   { id: 'projects',  label: 'Proyectos',           Icon: Briefcase },
+  { id: 'prompts',   label: 'Prompts',             Icon: FileText  },
   { id: 'users',     label: 'Usuarios',            Icon: Users     },
   { id: 'settings',  label: 'Configuración',       Icon: Settings  },
 ];

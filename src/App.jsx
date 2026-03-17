@@ -16,6 +16,7 @@ import CreateCampaignView from './components/CreateCampaignView.jsx';
 import CampaignContactsView from './components/CampaignContactsView.jsx';
 import FollowUpsView from './components/FollowUpsView.jsx';
 import ProjectsView from './components/ProjectsView.jsx';
+import PromptsView from './components/PromptsView.jsx';
 
 const TAB_LABELS = {
   dashboard: 'Dashboard',
@@ -24,6 +25,7 @@ const TAB_LABELS = {
   campaigns: 'Campañas',
   followups: 'Follow Ups',
   projects:  'Proyectos',
+  prompts:   'Prompts',
   users:     'Usuarios',
   settings:  'Configuración',
 };
@@ -446,6 +448,10 @@ export default function App() {
 
             {activeTab === 'projects' && (
               <ProjectsView />
+            )}
+
+            {activeTab === 'prompts' && (
+              <PromptsView />
             )}
 
             {activeTab === 'users' && (
