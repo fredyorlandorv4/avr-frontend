@@ -49,7 +49,7 @@ export default function PromptsView() {
         method:          'PUT',
         token:           authToken,
         onUnauthorized:  logout,
-        body:            JSON.stringify({ active: !p.active }),
+        body:            { active: !p.active },
       });
       load();
     } catch {

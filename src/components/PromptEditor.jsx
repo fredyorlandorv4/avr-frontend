@@ -86,7 +86,7 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
           method:         promptId ? 'PUT' : 'POST',
           token:          authToken,
           onUnauthorized: logout,
-          body:           JSON.stringify(promptId ? { template } : { ...prompt, template }),
+          body:           promptId ? { template } : { ...prompt, template },
         }
       );
       if (!res.ok) throw new Error('Error al guardar');
