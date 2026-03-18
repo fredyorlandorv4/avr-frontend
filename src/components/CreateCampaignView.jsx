@@ -61,6 +61,10 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
       setUploadError('Por favor ingresa un nombre para la campaña');
       return;
     }
+    if (!selectedProjectId) {
+      setUploadError('Por favor selecciona un proyecto asociado');
+      return;
+    }
     if (!selectedFile) {
       setUploadError('Por favor selecciona un archivo Excel con los contactos');
       return;
@@ -173,7 +177,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
 
           {/* Proyecto asociado */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Proyecto Asociado</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Proyecto Asociado *</label>
             <div className="relative">
               <select
                 value={selectedProjectId}
@@ -256,7 +260,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
         <div className="flex flex-col sm:flex-row gap-3 mt-8">
           <button
             onClick={handleUpload}
-            disabled={uploadLoading || !campaignName || !selectedFile}
+            disabled={uploadLoading || !campaignName || !selectedProjectId || !selectedFile}
             className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {uploadLoading ? (
