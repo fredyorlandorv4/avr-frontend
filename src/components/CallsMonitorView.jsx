@@ -50,6 +50,10 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
   const [filterSearch,   setFilterSearch]   = useState('');
   const [filterCampaign, setFilterCampaign] = useState('');
 
+  // Paginación
+  const PAGE_SIZE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Audio player
   const [activeAudioId, setActiveAudioId] = useState(null);   // call.id con player abierto
   const [audioLoading,  setAudioLoading]  = useState({});     // { [call.id]: true/false }
@@ -92,7 +96,15 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
   const clearFilters = () => {
     setFilterStatus('all'); setFilterDate('');
     setFilterSearch('');    setFilterCampaign('');
+    setCurrentPage(1);
   };
+
+  // Resetear a página 1 cuando cambia algún filtro
+  const setFilter = (setter) => (val) => { setter(val); setCurrentPage(1); };
+
+  // Paginación sobre resultados filtrados
+  const totalPages  = Math.max(1, Math.ceil(filteredCalls.length / PAGE_SIZE));
+  const pagedCalls  = filteredCalls.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // ── Lógica del player ─────────────────────────────────────
   const handleToggleAudio = useCallback(async (call) => {
@@ -171,7 +183,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
             <input
               type="text"
               value={filterSearch}
-              onChange={(e) => setFilterSearch(e.target.value)}
+              onChange={(e) => setFilter(setFilterSearch)(e.target.value)}
               placeholder="Nombre o teléfono..."
               className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             />
@@ -179,7 +191,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
 
           <select
             value={filterCampaign}
-            onChange={(e) => setFilterCampaign(e.target.value)}
+            onChange={(e) => setFilter(setFilterCampaign)(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="">Todas las campañas</option>
@@ -190,7 +202,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
 
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(e) => setFilter(setFilterStatus)(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="all">Todos los estados</option>
@@ -204,7 +216,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
             <input
               type="date"
               value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
+              onChange={(e) => setFilter(setFilterDate)(e.target.value)}
               className="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             />
             {hasActiveFilters && (
@@ -238,8 +250,64 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
             )}
           </div>
         ) : (
+          <>
+          {/* Controles de paginación — arriba */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-gray-500">
+                Página {currentPage} de {totalPages} &nbsp;·&nbsp; {filteredCalls.length} llamadas
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >«</button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >‹ Anterior</button>
+
+                {/* Números de página */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                  .reduce((acc, p, idx, arr) => {
+                    if (idx > 0 && p - arr[idx - 1] > 1) acc.push('…');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === '…'
+                      ? <span key={`ellipsis-${idx}`} className="px-2 py-1 text-sm text-gray-400">…</span>
+                      : <button
+                          key={item}
+                          onClick={() => setCurrentPage(item)}
+                          className={`px-3 py-1 text-sm border rounded transition ${
+                            currentPage === item
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >{item}</button>
+                  )
+                }
+
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >Siguiente ›</button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >»</button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
-            {filteredCalls.map((call) => {
+            {pagedCalls.map((call) => {
               const contactName  = call.client_name   || null;
               const phone        = call.destination   || '—';
               const campaignName = call.campaign_name || null;
@@ -367,6 +435,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
               );
             })}
           </div>
+          </>
         )}
       </div>
     </div>
