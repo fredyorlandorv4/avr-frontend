@@ -175,7 +175,7 @@ export default function App() {
     if (!authToken || !campaignId) return;
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/v1/campaigns/${campaignId}/start`, {
+      const res = await apiFetch(`/api/v1/campaigns/campaigns/${campaignId}/start-queue`, {
         method: 'POST',
         token: authToken,
         onUnauthorized: logout,
