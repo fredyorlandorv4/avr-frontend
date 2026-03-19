@@ -1,6 +1,9 @@
 import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, X, Briefcase, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
+// Tabs visibles solo para admin
+const ADMIN_ONLY = new Set(['reports', 'prompts', 'users', 'settings']);
+
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard',           Icon: Activity  },
   { id: 'calls',     label: 'Monitor de Llamadas', Icon: Phone     },
@@ -14,7 +17,9 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar({ activeTab, sidebarOpen, onTabChange, onClose }) {
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
+
+  const visibleItems = NAV_ITEMS.filter(({ id }) => !ADMIN_ONLY.has(id) || isAdmin);
 
   return (
     <>
@@ -40,7 +45,7 @@ export default function Sidebar({ activeTab, sidebarOpen, onTabChange, onClose }
         </div>
 
         <nav className="p-4 space-y-2 lg:pt-4 pt-20 pb-8">
-          {NAV_ITEMS.map(({ id, label, Icon }) => (
+          {visibleItems.map(({ id, label, Icon }) => (
             <button
               key={id}
               onClick={() => onTabChange(id)}

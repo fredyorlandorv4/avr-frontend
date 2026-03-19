@@ -28,7 +28,7 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        login(data.access_token, usernameField);
+        login(data.access_token, usernameField, data.role || '');
       } else {
         setLoginError(data.detail || 'Usuario o contraseña incorrectos');
       }

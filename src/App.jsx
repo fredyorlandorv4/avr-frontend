@@ -31,7 +31,7 @@ const TAB_LABELS = {
 };
 
 export default function App() {
-  const { authToken, isLoggedIn, logout } = useAuth();
+  const { authToken, isLoggedIn, logout, isAdmin } = useAuth();
 
   // Navigation
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -390,7 +390,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'reports' && (
+            {activeTab === 'reports' && isAdmin && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                   <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -450,11 +450,11 @@ export default function App() {
               <ProjectsView />
             )}
 
-            {activeTab === 'prompts' && (
+            {activeTab === 'prompts' && isAdmin && (
               <PromptsView />
             )}
 
-            {activeTab === 'users' && (
+            {activeTab === 'users' && isAdmin && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                   <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -464,7 +464,7 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'settings' && (
+            {activeTab === 'settings' && isAdmin && (
               <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                   <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
