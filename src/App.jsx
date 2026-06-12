@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Phone, Bell, LogOut, Menu, X, BarChart3, Users, Settings } from 'lucide-react';
+import { Routes, Route, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Phone, Bell, Menu, X, BarChart3, Users, Settings } from 'lucide-react';
 
 import { useAuth } from './context/AuthContext.jsx';
 import { apiFetch } from './api.js';
@@ -18,44 +19,180 @@ import FollowUpsView from './components/FollowUpsView.jsx';
 import ProjectsView from './components/ProjectsView.jsx';
 import PromptsView from './components/PromptsView.jsx';
 
-const TAB_LABELS = {
-  dashboard: 'Dashboard',
-  calls:     'Monitor de Llamadas',
-  reports:   'Reportes',
-  campaigns: 'Campañas',
-  followups: 'Follow Ups',
-  projects:  'Proyectos',
-  prompts:   'Prompts',
-  users:     'Usuarios',
-  settings:  'Configuración',
+const PATH_LABELS = {
+  '/dashboard':     'Dashboard',
+  '/calls':         'Monitor de Llamadas',
+  '/reports':       'Reportes',
+  '/campaigns':     'Campañas',
+  '/campaigns/new': 'Nueva Campaña',
+  '/followups':     'Follow Ups',
+  '/projects':      'Proyectos',
+  '/prompts':       'Prompts',
+  '/users':         'Usuarios',
+  '/settings':      'Configuración',
 };
 
-export default function App() {
-  const { authToken, isLoggedIn, logout, isAdmin } = useAuth();
+// ─── Auth guards ─────────────────────────────────────────────────────────────
 
-  // Navigation
-  const [activeTab, setActiveTab] = useState('dashboard');
+function PrivateRoute({ children }) {
+  const { isLoggedIn } = useAuth();
+  return isLoggedIn ? children : <Navigate to="/login" replace />;
+}
+
+function PublicRoute({ children }) {
+  const { isLoggedIn } = useAuth();
+  return isLoggedIn ? <Navigate to="/dashboard" replace /> : children;
+}
+
+// ─── Layout (fixed chrome: sidebar + headers — content goes in <Outlet />) ─────
+
+function Layout() {
+  const { logout, username, role } = useAuth();
+  const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [campaignView, setCampaignView] = useState('list');
-  const [selectedCampaign, setSelectedCampaign] = useState(null);
 
-  // Global UI
-  const [loading, setLoading] = useState(false);
+  const pageTitle = (() => {
+    if (pathname.startsWith('/campaigns/') && pathname.endsWith('/contacts')) return 'Contactos de Campaña';
+    return PATH_LABELS[pathname] ?? 'RV4 - Call System';
+  })();
+
+  return (
+    <div className="h-screen overflow-hidden bg-gray-200">
+      <div className="h-full flex overflow-hidden bg-gray-50 mx-auto max-w-[2000px] shadow-xl">
+        <Sidebar sidebarOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile header */}
+        <header className="lg:hidden bg-white border-b border-gray-100 shrink-0 z-10">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(v => !v)}
+                className="p-2 text-[#053E68] hover:bg-gray-100 rounded-xl transition"
+              >
+                {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-9 h-9 bg-[#053E68] rounded-xl flex-shrink-0">
+                  <Phone className="w-5 h-5 text-[#F4CD04]" />
+                </div>
+                <h1 className="text-base font-bold text-[#053E68] leading-tight">RV4 - Call System</h1>
+              </div>
+            </div>
+            <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-xl transition">
+              <Bell className="w-6 h-6" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#F4CD04] rounded-xl ring-2 ring-white" />
+            </button>
+          </div>
+        </header>
+
+        {/* Desktop header */}
+        <header className="hidden lg:block bg-white border-b border-gray-100 shrink-0 z-10">
+          <div className="flex items-center justify-between px-4 lg:px-8 py-4">
+            <div>
+              <h2 className="text-2xl font-bold text-[#053E68]">{pageTitle}</h2>
+              <div className="h-1 w-10 bg-[#F4CD04] rounded-xl mt-1.5" />
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="relative p-2.5 text-gray-500 hover:bg-gray-100 rounded-xl transition">
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#F4CD04] rounded-xl ring-2 ring-white" />
+              </button>
+              <div className="h-8 w-px bg-gray-200" />
+              <div className="flex items-center gap-3 pl-1">
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-[#053E68] leading-tight">{username || 'Usuario'}</p>
+                  <p className="text-xs text-gray-400 capitalize">{role || 'usuario'}</p>
+                </div>
+                <div className="flex items-center justify-center w-10 h-10 bg-[#053E68] rounded-xl flex-shrink-0">
+                  <span className="text-[#F4CD04] font-bold uppercase">
+                    {(username || 'U').charAt(0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Scrollable content region */}
+        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+          <Outlet />
+        </main>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Placeholder for "coming soon" admin sections ─────────────────────────────
+
+function ComingSoon({ Icon, title }) {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="text-center">
+        <Icon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">{title}</h3>
+        <p className="text-gray-500">Próximamente disponible</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Campaign sub-page wrappers ───────────────────────────────────────────────
+
+function CreateCampaignPage({ loadCampaigns }) {
+  const navigate = useNavigate();
+  return (
+    <CreateCampaignView
+      onCancel={() => navigate('/campaigns')}
+      onSuccess={() => { loadCampaigns(); navigate('/campaigns'); }}
+    />
+  );
+}
+
+function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loadCampaignContacts, onViewCallAnalysis }) {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const { state } = useLocation();
+  const campaignId = parseInt(id);
+  const campaign = state?.campaign ?? campaigns.find(c => c.id === campaignId);
+
+  useEffect(() => {
+    if (campaignId) loadCampaignContacts(campaignId);
+  }, [campaignId]);
+
+  return (
+    <CampaignContactsView
+      campaign={campaign}
+      contacts={campaignContacts}
+      calls={calls}
+      loading={loading}
+      onBack={() => navigate('/campaigns')}
+      onRefresh={() => loadCampaignContacts(campaignId)}
+      onViewCallAnalysis={onViewCallAnalysis}
+    />
+  );
+}
+
+// ─── App shell (holds shared state + data loaders, defines routes) ────────────
+
+function AppShell() {
+  const { authToken, isLoggedIn, logout, isAdmin } = useAuth();
+  const navigate = useNavigate();
+
+  const [loading, setLoading]   = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [toast, setToast] = useState({ show: false, message: '', type: '' });
+  const [toast, setToast]       = useState({ show: false, message: '', type: '' });
 
-  // Modal state
   const [showTranscriptionModal, setShowTranscriptionModal] = useState(false);
-  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-  const [selectedCall, setSelectedCall] = useState(null);
+  const [showAnalysisModal, setShowAnalysisModal]           = useState(false);
+  const [selectedCall, setSelectedCall]                     = useState(null);
 
-  // Data
-  const [calls, setCalls] = useState([]);
-  const [stats, setStats] = useState({ active: 0, completed: 0, pending: 0, failed: 0, avgDuration: 0 });
-  const [campaigns, setCampaigns] = useState([]);
+  const [calls, setCalls]                       = useState([]);
+  const [campaigns, setCampaigns]               = useState([]);
   const [campaignContacts, setCampaignContacts] = useState([]);
-  const [followUps, setFollowUps] = useState([]);
-  const [followUpStats, setFollowUpStats] = useState({ total: 0, green: 0, orange: 0, red: 0, completed: 0 });
+  const [followUps, setFollowUps]               = useState([]);
+  const [followUpStats, setFollowUpStats]       = useState({ total: 0, green: 0, orange: 0, red: 0, completed: 0 });
 
   // --- Helpers ---
 
@@ -74,21 +211,7 @@ export default function App() {
         token: authToken,
         onUnauthorized: logout,
       });
-      if (res.ok) {
-        const data = await res.json();
-        setCalls(data);
-
-        const active    = data.filter(c => c.status === 'ringing' || c.status === 'active').length;
-        const completed = data.filter(c => c.status === 'completed' || c.status === 'answered').length;
-        const pending   = data.filter(c => c.status === 'pending').length;
-        const failed    = data.filter(c => c.status === 'failed' || c.status === 'no-answer' || c.status === 'busy').length;
-        const withDur   = data.filter(c => c.duration != null && c.duration > 0);
-        const avgDuration = withDur.length > 0
-          ? Math.round(withDur.reduce((acc, c) => acc + c.duration, 0) / withDur.length)
-          : 0;
-
-        setStats({ active, completed, pending, failed, avgDuration });
-      }
+      if (res.ok) setCalls(await res.json());
     } catch (err) {
       if (err.message !== 'Unauthorized') console.error('Error loading calls:', err);
     } finally {
@@ -108,12 +231,12 @@ export default function App() {
         setCampaigns(data.map(c => ({
           id:          c.id,
           name:        c.name,
-          title:       c.title       || '',
-          description: c.description || '',
+          title:       c.title        || '',
+          description: c.description  || '',
           projectName: c.project_name || c.project?.name || '',
           status:      c.status,
-          contacts:    c.total_contacts  || 0,
-          completed:   c.called_contacts || 0,
+          contacts:    c.total_contacts   || 0,
+          completed:   c.called_contacts  || 0,
           pending:     Math.max(0, (c.total_contacts || 0) - (c.called_contacts || 0)),
           created:     c.created_at ? new Date(c.created_at).toLocaleDateString('es-GT') : '-',
         })));
@@ -202,12 +325,10 @@ export default function App() {
 
     const previousState = followUp.completed;
 
-    // Optimistic update
     setFollowUps(prev => prev.map(fu => fu.id === followUpId
       ? { ...fu, completed: !fu.completed, completed_at: !fu.completed ? new Date().toISOString() : null }
       : fu
     ));
-
     showToast(previousState ? 'Follow-up marcado como pendiente' : '✓ Follow-up completado', previousState ? 'info' : 'success');
 
     try {
@@ -216,9 +337,7 @@ export default function App() {
         token: authToken,
         onUnauthorized: logout,
       });
-
       if (!res.ok) {
-        // Rollback
         setFollowUps(prev => prev.map(fu => fu.id === followUpId
           ? { ...fu, completed: previousState, completed_at: previousState ? followUp.completed_at : null }
           : fu
@@ -241,7 +360,6 @@ export default function App() {
 
   // --- Effects ---
 
-  // Initial data load + 30s polling
   useEffect(() => {
     if (!isLoggedIn || !authToken) return;
     loadCalls();
@@ -249,7 +367,7 @@ export default function App() {
     loadFollowUps();
     loadFollowUpStats();
     const interval = setInterval(() => {
-      loadCalls({ silent: true });   // sin spinner — refresco en segundo plano
+      loadCalls({ silent: true });
       loadCampaigns();
       loadFollowUps();
       loadFollowUpStats();
@@ -257,14 +375,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLoggedIn, authToken]);
 
-  // Load contacts when selected campaign changes
-  useEffect(() => {
-    if (selectedCampaign?.id && authToken) {
-      loadCampaignContacts(selectedCampaign.id);
-    }
-  }, [selectedCampaign?.id]);
-
-  // Mobile detection
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
     const onChange = (e) => setIsMobile(e.matches);
@@ -275,21 +385,13 @@ export default function App() {
 
   // --- Handlers ---
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    if (tab === 'campaigns') setCampaignView('list');
-    if (window.innerWidth < 1024) setSidebarOpen(false);
-  };
-
-  const openAnalysis = (call) => { setSelectedCall(call); setShowAnalysisModal(true); };
+  const openAnalysis      = (call) => { setSelectedCall(call); setShowAnalysisModal(true); };
   const openTranscription = (call) => { setSelectedCall(call); setShowTranscriptionModal(true); };
 
   // --- Render ---
 
-  if (!isLoggedIn) return <LoginPage />;
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       <TranscriptionModal
         show={showTranscriptionModal}
         call={selectedCall}
@@ -307,175 +409,115 @@ export default function App() {
         onDismiss={() => setToast({ show: false, message: '', type: '' })}
       />
 
-      {/* Mobile header */}
-      <header className="lg:hidden bg-white shadow-sm border-b sticky top-0 z-30 w-full">
-        <div className="w-full flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition"
-            >
-              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-            <div className="flex items-center gap-2">
-              <Phone className="w-8 h-8 text-blue-600 flex-shrink-0" />
-              <div>
-                <h1 className="text-xl font-bold text-gray-800">AVR System</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Agent Voice Response</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <button className="relative p-2 hover:bg-gray-100 rounded-lg transition">
-              <Bell className="w-6 h-6 text-gray-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="hidden sm:inline">Salir</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
 
-      <div className="lg:flex">
-        <Sidebar
-          activeTab={activeTab}
-          sidebarOpen={sidebarOpen}
-          onTabChange={handleTabChange}
-          onClose={() => setSidebarOpen(false)}
-        />
+          <Route path="/dashboard" element={
+            <DashboardView
+              calls={calls}
+              campaigns={campaigns}
+              followUps={followUps}
+              onRefresh={loadCalls}
+            />
+          } />
 
-        <div className="flex-1 min-h-screen">
-          {/* Desktop header */}
-          <header className="hidden lg:block bg-white shadow-sm border-b">
-            <div className="flex items-center justify-between px-4 lg:px-8 py-4">
-              <h2 className="text-2xl font-bold text-gray-800">{TAB_LABELS[activeTab] || activeTab}</h2>
-              <div className="flex items-center gap-4">
-                <button className="relative p-2 hover:bg-gray-100 rounded-lg transition">
-                  <Bell className="w-6 h-6 text-gray-600" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-                </button>
-                <button
-                  onClick={logout}
-                  className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                >
-                  <LogOut className="w-5 h-5" />
-                  Salir
-                </button>
-              </div>
-            </div>
-          </header>
+          <Route path="/calls" element={
+            <CallsMonitorView
+              calls={calls}
+              loading={loading}
+              onRefresh={loadCalls}
+              onViewTranscription={openTranscription}
+              onViewAnalysis={openAnalysis}
+            />
+          } />
 
-          <main className="p-4 lg:p-8 bg-gray-50 min-h-screen">
-            {activeTab === 'dashboard' && (
-              <DashboardView
-                calls={calls}
-                campaigns={campaigns}
-                followUps={followUps}
-                onRefresh={loadCalls}
-              />
-            )}
+          <Route path="/reports" element={
+            isAdmin ? <ComingSoon Icon={BarChart3} title="Módulo de Reportes" /> : <Navigate to="/dashboard" replace />
+          } />
 
-            {activeTab === 'calls' && (
-              <CallsMonitorView
-                calls={calls}
-                loading={loading}
-                onRefresh={loadCalls}
-                onViewTranscription={openTranscription}
-                onViewAnalysis={openAnalysis}
-              />
-            )}
+          <Route path="/campaigns" element={
+            <CampaignListView
+              campaigns={campaigns}
+              loading={loading}
+              onRefresh={loadCampaigns}
+              onCreateNew={() => navigate('/campaigns/new')}
+              onViewContacts={(campaign) => navigate(`/campaigns/${campaign.id}/contacts`, { state: { campaign } })}
+              onStartCampaign={startCampaign}
+            />
+          } />
 
-            {activeTab === 'reports' && isAdmin && (
-              <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                  <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-700 mb-2">Módulo de Reportes</h3>
-                  <p className="text-gray-500">Próximamente disponible</p>
-                </div>
-              </div>
-            )}
+          <Route path="/campaigns/new" element={
+            <CreateCampaignPage loadCampaigns={loadCampaigns} />
+          } />
 
-            {activeTab === 'campaigns' && (
-              <>
-                {campaignView === 'list' && (
-                  <CampaignListView
-                    campaigns={campaigns}
-                    loading={loading}
-                    onRefresh={loadCampaigns}
-                    onCreateNew={() => setCampaignView('create')}
-                    onViewContacts={(campaign) => { setSelectedCampaign(campaign); setCampaignView('contacts'); }}
-                    onStartCampaign={startCampaign}
-                  />
-                )}
-                {campaignView === 'create' && (
-                  <CreateCampaignView
-                    onCancel={() => setCampaignView('list')}
-                    onSuccess={() => { loadCampaigns(); setCampaignView('list'); }}
-                  />
-                )}
-                {campaignView === 'contacts' && (
-                  <CampaignContactsView
-                    campaign={selectedCampaign}
-                    contacts={campaignContacts}
-                    calls={calls}
-                    loading={loading}
-                    onBack={() => { setCampaignView('list'); setSelectedCampaign(null); }}
-                    onRefresh={() => loadCampaignContacts(selectedCampaign.id)}
-                    onViewCallAnalysis={openAnalysis}
-                  />
-                )}
-              </>
-            )}
+          <Route path="/campaigns/:id/contacts" element={
+            <CampaignContactsPage
+              campaigns={campaigns}
+              campaignContacts={campaignContacts}
+              calls={calls}
+              loading={loading}
+              loadCampaignContacts={loadCampaignContacts}
+              onViewCallAnalysis={openAnalysis}
+            />
+          } />
 
-            {activeTab === 'followups' && (
-              <FollowUpsView
-                followUps={followUps}
-                followUpStats={followUpStats}
-                isMobile={isMobile}
-                onToggleComplete={toggleFollowUpCompletion}
-                onRefresh={() => {
-                  loadFollowUps();
-                  loadFollowUpStats();
-                  showToast('Follow-ups actualizados', 'success');
-                }}
-              />
-            )}
+          <Route path="/followups" element={
+            <FollowUpsView
+              followUps={followUps}
+              followUpStats={followUpStats}
+              isMobile={isMobile}
+              onToggleComplete={toggleFollowUpCompletion}
+              onRefresh={() => {
+                loadFollowUps();
+                loadFollowUpStats();
+                showToast('Follow-ups actualizados', 'success');
+              }}
+            />
+          } />
 
-            {activeTab === 'projects' && (
-              <ProjectsView />
-            )}
+          <Route path="/projects" element={<ProjectsView />} />
 
-            {activeTab === 'prompts' && isAdmin && (
-              <PromptsView />
-            )}
+          <Route path="/prompts" element={
+            isAdmin ? <PromptsView /> : <Navigate to="/dashboard" replace />
+          } />
 
-            {activeTab === 'users' && isAdmin && (
-              <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                  <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-700 mb-2">Gestión de Usuarios</h3>
-                  <p className="text-gray-500">Próximamente disponible</p>
-                </div>
-              </div>
-            )}
+          <Route path="/users" element={
+            isAdmin ? <ComingSoon Icon={Users} title="Gestión de Usuarios" /> : <Navigate to="/dashboard" replace />
+          } />
 
-            {activeTab === 'settings' && isAdmin && (
-              <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                  <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-gray-700 mb-2">Configuración</h3>
-                  <p className="text-gray-500">Próximamente disponible</p>
-                </div>
-              </div>
-            )}
-          </main>
-        </div>
-      </div>
-    </div>
+          <Route path="/settings" element={
+            isAdmin ? <ComingSoon Icon={Settings} title="Configuración" /> : <Navigate to="/dashboard" replace />
+          } />
+
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Route>
+      </Routes>
+    </>
+  );
+}
+
+// ─── Root: auth guards + login route ─────────────────────────────────────────
+
+export default function App() {
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <LoginPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/*"
+        element={
+          <PrivateRoute>
+            <AppShell />
+          </PrivateRoute>
+        }
+      />
+    </Routes>
   );
 }
