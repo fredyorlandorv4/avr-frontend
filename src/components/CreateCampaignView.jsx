@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, FileText, RefreshCw, ChevronDown } from 'lucide-react';
+import { ArrowLeft, FileText, RefreshCw, ChevronDown, CheckCircle2, AlertCircle, Target } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 
@@ -110,28 +110,29 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
   };
 
   return (
-    <div className="w-full space-y-6">
-      <div className="mb-6">
-        <button
-          onClick={onCancel}
-          disabled={uploadLoading}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition"
-        >
-          <X className="w-4 h-4" />
-          Volver a Campañas
-        </button>
-      </div>
+    <div className="max-w-[1280px] mx-auto space-y-6">
+      <button
+        onClick={onCancel}
+        disabled={uploadLoading}
+        className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-[#053E68] transition disabled:opacity-50"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Volver a Campañas
+      </button>
 
-      <div className="bg-white rounded-xl shadow-sm p-6 lg:p-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Crear Nueva Campaña</h2>
+      <div className="bg-white rounded-2xl shadow-sm p-6 lg:p-8 border border-gray-100">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center justify-center w-10 h-10 bg-[#053E68]/5 rounded-xl flex-shrink-0">
+            <Target className="w-5 h-5 text-[#053E68]" />
+          </div>
+          <h2 className="text-xl font-bold text-[#053E68]">Crear Nueva Campaña</h2>
+        </div>
 
         {uploadSuccess && (
           <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <svg className="w-5 h-5 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <p className="text-green-800 font-medium">{uploadSuccess}</p>
+              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <p className="text-green-800 font-medium text-sm">{uploadSuccess}</p>
             </div>
           </div>
         )}
@@ -139,9 +140,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
         {uploadError && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
               <p className="text-red-800 text-sm">{uploadError}</p>
             </div>
           </div>
@@ -157,7 +156,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
               value={campaignName}
               onChange={(e) => setCampaignName(e.target.value)}
               disabled={uploadLoading}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition text-base disabled:bg-gray-100 disabled:cursor-not-allowed"
               placeholder="Ej: Campaña Navideña 2024"
             />
           </div>
@@ -170,7 +169,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
               value={campaignTitle}
               onChange={(e) => setCampaignTitle(e.target.value)}
               disabled={uploadLoading}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition text-base disabled:bg-gray-100 disabled:cursor-not-allowed"
               placeholder="Ej: Recordatorio de pago Q3"
             />
           </div>
@@ -183,7 +182,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
                 value={selectedProjectId}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
                 disabled={uploadLoading || projectsLoading}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base appearance-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition text-base appearance-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="">
                   {projectsLoading ? 'Cargando proyectos...' : '-- Selecciona un proyecto --'}
@@ -206,7 +205,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
               onChange={(e) => setCampaignDescription(e.target.value)}
               disabled={uploadLoading}
               rows={3}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition text-base disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
               placeholder="Describe el objetivo de esta campaña..."
             />
           </div>
@@ -214,8 +213,8 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
           {/* Upload Excel */}
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">Cargar Lista de Contactos (Excel) *</label>
-            <div className={`border-2 border-dashed rounded-lg p-6 sm:p-12 text-center transition ${
-              selectedFile ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-blue-500'
+            <div className={`border-2 border-dashed rounded-xl p-6 sm:p-12 text-center transition ${
+              selectedFile ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-[#053E68] hover:bg-[#053E68]/5'
             } ${uploadLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
               <input
                 type="file"
@@ -261,7 +260,7 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
           <button
             onClick={handleUpload}
             disabled={uploadLoading || !campaignName || !selectedProjectId || !selectedFile}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-3 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition font-medium text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {uploadLoading ? (
               <><RefreshCw className="w-5 h-5 animate-spin" /> Cargando campaña...</>

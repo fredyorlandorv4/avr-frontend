@@ -102,6 +102,8 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
   // Resetear a página 1 cuando cambia algún filtro
   const setFilter = (setter) => (val) => { setter(val); setCurrentPage(1); };
 
+  const today = new Date().toISOString().slice(0, 10);
+
   // Paginación sobre resultados filtrados
   const totalPages  = Math.max(1, Math.ceil(filteredCalls.length / PAGE_SIZE));
   const pagedCalls  = filteredCalls.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -154,24 +156,24 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
 
   // ── Render ────────────────────────────────────────────────
   return (
-    <div className="w-full mx-auto space-y-6">
-      <div className="w-full bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+    <div className="max-w-[1280px] mx-auto space-y-6">
+      <div className="w-full bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">Monitor de Llamadas</h2>
-            {!loading && (
-              <p className="text-sm text-gray-500 mt-0.5">
-                {filteredCalls.length} de {calls.length} llamadas
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-7 bg-[#F4CD04] rounded-full" />
+            <div>
+              <p className="text-sm text-gray-400 mt-0.5">
+                {loading ? 'Cargando…' : `${filteredCalls.length} de ${calls.length} llamadas`}
               </p>
-            )}
+            </div>
           </div>
           <button
             onClick={onRefresh}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition font-medium text-sm"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
         </div>
@@ -185,14 +187,15 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
               value={filterSearch}
               onChange={(e) => setFilter(setFilterSearch)(e.target.value)}
               placeholder="Nombre o teléfono..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
             />
           </div>
 
           <select
             value={filterCampaign}
             onChange={(e) => setFilter(setFilterCampaign)(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            disabled={campaignOptions.length === 0}
+            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50"
           >
             <option value="">Todas las campañas</option>
             {campaignOptions.map(name => (
@@ -203,7 +206,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
           <select
             value={filterStatus}
             onChange={(e) => setFilter(setFilterStatus)(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
           >
             <option value="all">Todos los estados</option>
             <option value="active">Activas</option>
@@ -216,18 +219,18 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
             <input
               type="date"
               value={filterDate}
-              onChange={(e) => setFilter(setFilterDate)(e.target.value)}
-              className="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              max={today}
+              onChange={(e) => setFilter(setFilterDate)(e.target.value > today ? today : e.target.value)}
+              className="flex-1 min-w-0 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
             />
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                title="Limpiar filtros"
-                className="flex-shrink-0 flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              onClick={clearFilters}
+              disabled={!hasActiveFilters}
+              title="Limpiar filtros"
+              className="flex-shrink-0 flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -244,7 +247,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
               {calls.length === 0 ? 'No hay llamadas registradas' : 'No hay llamadas con los filtros aplicados'}
             </p>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-3 text-sm text-blue-600 hover:underline">
+              <button onClick={clearFilters} className="mt-3 text-sm text-[#053E68] font-medium hover:underline">
                 Limpiar filtros
               </button>
             )}
@@ -285,7 +288,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
                           onClick={() => setCurrentPage(item)}
                           className={`px-3 py-1 text-sm border rounded transition ${
                             currentPage === item
-                              ? 'bg-blue-600 text-white border-blue-600'
+                              ? 'bg-[#053E68] text-white border-[#053E68]'
                               : 'border-gray-300 hover:bg-gray-50'
                           }`}
                         >{item}</button>
@@ -332,7 +335,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
                         }
                         <p className="text-sm text-gray-600 font-mono mt-0.5">{phone}</p>
                         {campaignName && (
-                          <span className="inline-block mt-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
+                          <span className="inline-block mt-1 px-2 py-0.5 bg-[#053E68]/5 text-[#053E68] text-xs rounded-full font-medium">
                             {campaignName}
                           </span>
                         )}
@@ -371,7 +374,7 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
                     </button>
                     <button
                       onClick={() => onViewAnalysis(call)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition"
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-[#053E68]/5 text-[#053E68] rounded-lg hover:bg-[#053E68]/10 transition"
                     >
                       <BarChart3 className="w-4 h-4" />
                       Análisis

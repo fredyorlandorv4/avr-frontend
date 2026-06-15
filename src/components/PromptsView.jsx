@@ -1,15 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Plus, RefreshCw, FileText, Pencil, Power, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 import PromptEditor from './PromptEditor.jsx';
-
-const th = { padding: '10px 12px', fontWeight: 600, fontSize: 13, textAlign: 'left', borderBottom: '1px solid #e0e0e0' };
-const td = { padding: '10px 12px', fontSize: 13, verticalAlign: 'middle', borderBottom: '1px solid #f0f0f0' };
-const btnSecondary = {
-  marginRight: 6, padding: '4px 10px', fontSize: 12,
-  background: 'transparent', border: '1px solid #ddd',
-  borderRadius: 4, cursor: 'pointer',
-};
 
 export default function PromptsView() {
   const { authToken, logout } = useAuth();
@@ -58,7 +51,7 @@ export default function PromptsView() {
   };
 
   if (editing !== null) return (
-    <div style={{ padding: 24 }}>
+    <div className="max-w-[1280px] mx-auto">
       <PromptEditor
         promptId={editing === 'new' ? null : editing}
         onSaved={() => { setEditing(null); load(); }}
@@ -68,93 +61,118 @@ export default function PromptsView() {
   );
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Prompts de agentes</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#888' }}>
-            Gestiona los templates de prompts para los agentes de voz
-          </p>
+    <div className="max-w-[1280px] mx-auto space-y-6">
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <span className="w-1 h-9 bg-[#F4CD04] rounded-full" />
+          <div>
+            <h2 className="text-xl font-bold text-[#053E68] leading-tight">Prompts de agentes</h2>
+            <p className="text-sm text-gray-400 mt-0.5">Gestiona los templates de prompts para los agentes de voz</p>
+          </div>
         </div>
-        <button
-          onClick={() => setEditing('new')}
-          style={{
-            padding: '8px 16px', background: '#0055cc',
-            color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13,
-          }}
-        >
-          + Nuevo prompt
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={load}
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </button>
+          <button
+            onClick={() => setEditing('new')}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo prompt
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div style={{ background: '#fff0f0', border: '1px solid #ffaaaa',
-          borderRadius: 4, padding: '8px 12px', color: '#cc0000', fontSize: 13, marginBottom: 16 }}>
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-700 text-sm">
           {error}
         </div>
       )}
 
-      {loading ? (
-        <p style={{ color: '#888', fontSize: 13 }}>Cargando prompts...</p>
+      {/* Lista */}
+      {loading && prompts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
+          <RefreshCw className="w-10 h-10 text-gray-400 animate-spin mb-4" />
+          <p className="text-gray-500">Cargando prompts...</p>
+        </div>
       ) : prompts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: '#aaa' }}>
-          <p style={{ fontSize: 15, margin: 0 }}>No hay prompts configurados</p>
-          <p style={{ fontSize: 13, marginTop: 8 }}>Crea el primero con el botón de arriba</p>
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-4 bg-[#053E68]/5 rounded-full mb-4">
+            <FileText className="w-10 h-10 text-[#053E68]" />
+          </div>
+          <p className="text-gray-600 font-medium mb-1">No hay prompts configurados</p>
+          <p className="text-gray-400 text-sm">Crea el primero con el botón de arriba</p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-            <thead style={{ background: '#f5f5f5' }}>
-              <tr>
-                <th style={th}>Nombre</th>
-                <th style={th}>Tipo (agent_type)</th>
-                <th style={th}>Versión</th>
-                <th style={th}>Estado</th>
-                <th style={th}>Última edición</th>
-                <th style={th}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {prompts.map(p => (
-                <tr key={p.id} style={{ transition: 'background 0.1s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
-                  onMouseLeave={e => e.currentTarget.style.background = ''}
-                >
-                  <td style={{ ...td, fontWeight: 500 }}>{p.name}</td>
-                  <td style={td}><code style={{ fontSize: 12, background: '#f0f0f0', padding: '2px 6px', borderRadius: 3 }}>{p.agent_type}</code></td>
-                  <td style={td}>v{p.version}</td>
-                  <td style={td}>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 12, fontSize: 12,
-                      background: p.active ? '#e6f4ea' : '#fce8e6',
-                      color:      p.active ? '#137333' : '#c5221f',
-                    }}>
-                      {p.active ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td style={{ ...td, color: '#888' }}>
-                    {p.updated_at
-                      ? new Date(p.updated_at).toLocaleDateString('es-GT')
-                      : '—'}
-                  </td>
-                  <td style={td}>
-                    <button onClick={() => setEditing(p.id)} style={btnSecondary}>
-                      Editar
-                    </button>
-                    <button onClick={() => handleToggleActive(p)} style={btnSecondary}>
-                      {p.active ? 'Desactivar' : 'Activar'}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(p.id, p.name)}
-                      style={{ ...btnSecondary, color: '#c5221f', borderColor: '#f4b8b8' }}
-                    >
-                      Eliminar
-                    </button>
-                  </td>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-gray-50">
+                  {['Nombre', 'Tipo (agent_type)', 'Versión', 'Estado', 'Última edición', 'Acciones'].map(h => (
+                    <th key={h} className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider text-left px-4 py-3 whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {prompts.map(p => (
+                  <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50/60 transition">
+                    <td className="px-4 py-3 font-medium text-[#053E68] whitespace-nowrap">{p.name}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <code className="text-xs bg-[#053E68]/5 text-[#053E68] px-2 py-0.5 rounded font-mono">{p.agent_type}</code>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap tabular-nums">v{p.version}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                        p.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${p.active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        {p.active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
+                      {p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-GT') : '—'}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setEditing(p.id)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-[#053E68] bg-[#053E68]/5 rounded-lg hover:bg-[#053E68]/10 transition font-medium"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(p)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition font-medium"
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          {p.active ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id, p.name)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition font-medium"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -10,25 +10,31 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
     if (status === 'active')    return 'bg-green-100 text-green-800';
     if (status === 'paused')    return 'bg-yellow-100 text-yellow-800';
     if (status === 'completed') return 'bg-gray-100 text-gray-800';
-    if (status === 'created')   return 'bg-blue-100 text-blue-800';
+    if (status === 'created')   return 'bg-[#053E68]/10 text-[#053E68]';
     return 'bg-gray-100 text-gray-800';
   };
 
   return (
-    <div className="w-full mx-auto space-y-6">
+    <div className="max-w-[1280px] mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-2xl font-bold text-gray-800">Mis Campañas</h2>
+        <div className="flex items-center gap-2">
+          <span className="w-1 h-7 bg-[#F4CD04] rounded-full" />
+          <div>
+            <h2 className="text-xl font-bold text-[#053E68] leading-tight">Mis Campañas</h2>
+            <p className="text-sm text-gray-400 mt-0.5">{campaigns.length} campaña{campaigns.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
         <div className="flex gap-2">
           <button
             onClick={onRefresh}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
           <button
             onClick={onCreateNew}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium"
           >
             <Target className="w-4 h-4" />
             Nueva Campaña
@@ -37,20 +43,22 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
       </div>
 
       {campaigns.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
-          <Target className="w-12 h-12 text-gray-400 mb-4" />
-          <p className="text-gray-500 mb-2">No hay campañas disponibles</p>
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-4 bg-[#053E68]/5 rounded-full mb-4">
+            <Target className="w-10 h-10 text-[#053E68]" />
+          </div>
+          <p className="text-gray-600 font-medium mb-1">No hay campañas disponibles</p>
           <p className="text-sm text-gray-400">Crea tu primera campaña para comenzar</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {campaigns.map((campaign) => (
-            <div key={campaign.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
+            <div key={campaign.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
               <div className="p-6">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0 pr-2">
-                    <h3 className="text-lg font-semibold text-gray-800 leading-tight">{campaign.name}</h3>
-                    <p className={`text-sm font-medium mt-0.5 ${campaign.title ? 'text-blue-600' : 'text-gray-300 italic'}`}>
+                    <h3 className="text-lg font-semibold text-[#053E68] leading-tight">{campaign.name}</h3>
+                    <p className={`text-sm font-medium mt-0.5 ${campaign.title ? 'text-gray-600' : 'text-gray-300 italic'}`}>
                       {campaign.title || 'Sin título'}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">Creada: {campaign.created}</p>
@@ -89,7 +97,7 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
 
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
                   <div
-                    className="bg-blue-600 h-2 rounded-full transition-all"
+                    className="bg-[#053E68] h-2 rounded-full transition-all"
                     style={{ width: `${campaign.contacts > 0 ? (campaign.completed / campaign.contacts) * 100 : 0}%` }}
                   />
                 </div>
@@ -97,7 +105,7 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
                 <div className="flex gap-2">
                   <button
                     onClick={() => onViewContacts(campaign)}
-                    className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition"
+                    className="flex-1 px-3 py-2 text-sm font-medium bg-[#053E68]/5 text-[#053E68] rounded-lg hover:bg-[#053E68]/10 transition"
                   >
                     Ver Contactos
                   </button>
@@ -105,7 +113,7 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
                     <button
                       onClick={() => onStartCampaign(campaign.id, campaign.name)}
                       disabled={loading}
-                      className="flex items-center justify-center gap-1 px-3 py-2 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center justify-center gap-1 px-3 py-2 text-sm font-medium bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Play className="w-4 h-4" />
                       Iniciar

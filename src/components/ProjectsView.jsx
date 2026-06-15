@@ -82,40 +82,42 @@ export default function ProjectsView() {
   };
 
   return (
-    <div className="w-full mx-auto space-y-6">
+    <div className="max-w-[1280px] mx-auto space-y-6">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Proyectos</h2>
-          <p className="text-sm text-gray-500 mt-1">{projects.length} proyecto{projects.length !== 1 ? 's' : ''} registrado{projects.length !== 1 ? 's' : ''}</p>
+        <div className="flex items-center gap-2">
+          <span className="w-1 h-7 bg-[#F4CD04] rounded-full" />
+          <div>
+            <p className="text-sm text-gray-400 mt-0.5">{projects.length} proyecto{projects.length !== 1 ? 's' : ''} registrado{projects.length !== 1 ? 's' : ''}</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <button
             onClick={loadProjects}
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              <Plus className="w-4 h-4" />
-              Nuevo Proyecto
-            </button>
-          )}
+          <button
+            onClick={() => setShowForm(true)}
+            disabled={showForm}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo Proyecto
+          </button>
         </div>
       </div>
 
       {/* Formulario de creación */}
       {showForm && (
-        <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Nuevo Proyecto</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-1 h-5 bg-[#F4CD04] rounded-full" />
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex-1">Nuevo Proyecto</h3>
             <button
               onClick={handleCancelForm}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition"
@@ -139,13 +141,13 @@ export default function ProjectsView() {
               disabled={createLoading}
               autoFocus
               placeholder="Nombre del proyecto"
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-base transition disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
             <div className="flex gap-2">
               <button
                 onClick={handleCreate}
                 disabled={createLoading || !newProjectName.trim()}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {createLoading ? (
                   <><RefreshCw className="w-4 h-4 animate-spin" /> Creando...</>
@@ -167,14 +169,14 @@ export default function ProjectsView() {
 
       {/* Lista de proyectos */}
       {loading && projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
           <RefreshCw className="w-10 h-10 text-gray-400 animate-spin mb-4" />
           <p className="text-gray-500">Cargando proyectos...</p>
         </div>
       ) : projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl shadow-sm border border-gray-100">
-          <div className="p-4 bg-gray-100 rounded-full mb-4">
-            <Briefcase className="w-10 h-10 text-gray-400" />
+        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
+          <div className="p-4 bg-[#053E68]/5 rounded-full mb-4">
+            <Briefcase className="w-10 h-10 text-[#053E68]" />
           </div>
           <p className="text-gray-600 font-medium mb-1">No hay proyectos registrados</p>
           <p className="text-gray-400 text-sm">Crea tu primer proyecto usando el botón de arriba</p>
@@ -184,14 +186,14 @@ export default function ProjectsView() {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition"
+              className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
             >
               <div className="flex items-start gap-4">
-                <div className="p-3 bg-blue-50 rounded-lg flex-shrink-0">
-                  <Briefcase className="w-6 h-6 text-blue-600" />
+                <div className="p-3 bg-[#053E68]/5 rounded-xl flex-shrink-0">
+                  <Briefcase className="w-6 h-6 text-[#053E68]" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-gray-800 truncate">{project.name}</h3>
+                  <h3 className="font-semibold text-[#053E68] truncate">{project.name}</h3>
                   <p className="text-xs text-gray-400 mt-1">ID: {project.id}</p>
                   {project.created_at && (
                     <p className="text-xs text-gray-400 mt-0.5">

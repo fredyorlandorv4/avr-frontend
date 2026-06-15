@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, PieChart, Pie, Legend, ComposedChart, Area,
 } from 'recharts';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 
@@ -11,9 +11,10 @@ import { apiFetch } from '../api.js';
 const C = {
   effective:   '#1D9E75',
   ineffective: '#E24B4A',
-  total:       '#378ADD',
+  total:       '#053E68',  // azul marca
   amber:       '#BA7517',
   blue2:       '#B5D4F4',
+  accent:      '#F4CD04',  // amarillo marca
 };
 
 // ─── Helpers ──────────────────────────────────────────────────
@@ -41,36 +42,52 @@ function buildQuery(params) {
   return str ? `?${str}` : '';
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────
-function KpiCard({ label, value, sub, accent }) {
-  const colors = { green: C.effective, red: C.ineffective, blue: C.total, amber: C.amber };
+// ─── Section card ─────────────────────────────────────────────
+function Section({ title, children, className = '' }) {
   return (
-    <div style={{ background: '#f5f5f5', borderRadius: 8, padding: '0.85rem 1rem' }}>
-      <p style={{ fontSize: 11, color: '#888', margin: '0 0 3px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-        {label}
-      </p>
-      <p style={{ fontSize: 24, fontWeight: 600, margin: 0, lineHeight: 1, color: accent ? colors[accent] : 'inherit', fontVariantNumeric: 'tabular-nums' }}>
+    <div className={`bg-white border border-gray-100 rounded-2xl p-4 lg:p-5 shadow-sm ${className}`}>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-1 h-4 bg-[#F4CD04] rounded-full" />
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</h2>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── KPI Card ─────────────────────────────────────────────────
+const KPI_COLORS = { green: C.effective, red: C.ineffective, blue: C.total, amber: C.amber };
+
+function KpiCard({ label, value, sub, accent }) {
+  return (
+    <div className="bg-gray-50 rounded-xl px-4 py-3">
+      <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">{label}</p>
+      <p
+        className="text-2xl font-semibold leading-none tabular-nums"
+        style={{ color: accent ? KPI_COLORS[accent] : '#053E68' }}
+      >
         {value}
       </p>
-      {sub && <p style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>{sub}</p>}
+      {sub && <p className="text-[11px] text-gray-400 mt-1">{sub}</p>}
     </div>
   );
 }
 
 // ─── Tabla de agentes ─────────────────────────────────────────
 function AgentTable({ agents }) {
-  const th = { fontSize: 11, fontWeight: 500, color: '#888', padding: '0 10px 8px', textAlign: 'left', borderBottom: '0.5px solid #ddd', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' };
-  const td = { padding: '10px 10px', borderBottom: '0.5px solid #eee', fontSize: 13, whiteSpace: 'nowrap' };
+  if (!agents.length) return <p className="text-gray-400 text-sm py-4">Sin datos de agentes</p>;
 
-  if (!agents.length) return <p style={{ color: '#aaa', fontSize: 13, padding: '1rem 0' }}>Sin datos de agentes</p>;
+  const headers = ['Agente', 'Llamadas', 'Efectivas', 'Eficiencia', 'Dur. Mín', 'Dur. Máx', 'Mediana', 'Estado'];
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
         <thead>
           <tr>
-            {['Agente','Llamadas','Efectivas','Eficiencia','Dur. Mín','Dur. Máx','Mediana','Estado'].map(h => (
-              <th key={h} style={th}>{h}</th>
+            {headers.map(h => (
+              <th key={h} className="text-[11px] font-medium text-gray-400 uppercase tracking-wider text-left px-2.5 pb-2 border-b border-gray-200 whitespace-nowrap">
+                {h}
+              </th>
             ))}
           </tr>
         </thead>
@@ -80,23 +97,25 @@ function AgentTable({ agents }) {
             const badge = effBadge(pct);
             const barColor = pct >= 75 ? C.effective : pct >= 40 ? C.amber : C.ineffective;
             return (
-              <tr key={a.user_id ?? i}>
-                <td style={{ ...td, fontWeight: 500 }}>{a.agent_name ?? a.name ?? a.full_name ?? `Agente ${a.user_id}`}</td>
-                <td style={td}>{a.total_calls ?? a.totalCalls ?? 0}</td>
-                <td style={td}>{a.effective ?? 0}</td>
-                <td style={td}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ background: '#eee', borderRadius: 2, height: 6, width: 70, flexShrink: 0 }}>
-                      <div style={{ width: `${pct}%`, height: 6, borderRadius: 2, background: barColor }} />
+              <tr key={a.user_id ?? i} className="hover:bg-gray-50/60">
+                <td className="px-2.5 py-2.5 border-b border-gray-100 font-medium text-gray-700 whitespace-nowrap">
+                  {a.agent_name ?? a.name ?? a.full_name ?? `Agente ${a.user_id}`}
+                </td>
+                <td className="px-2.5 py-2.5 border-b border-gray-100 text-gray-600 whitespace-nowrap">{a.total_calls ?? a.totalCalls ?? 0}</td>
+                <td className="px-2.5 py-2.5 border-b border-gray-100 text-gray-600 whitespace-nowrap">{a.effective ?? 0}</td>
+                <td className="px-2.5 py-2.5 border-b border-gray-100 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <div className="bg-gray-200 rounded h-1.5 w-[70px] shrink-0">
+                      <div className="h-1.5 rounded" style={{ width: `${pct}%`, background: barColor }} />
                     </div>
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 12 }}>{pct}%</span>
+                    <span className="tabular-nums text-xs text-gray-600">{pct}%</span>
                   </div>
                 </td>
-                <td style={{ ...td, color: '#888' }}>{fmtDuration(a.min_duration_sec ?? a.min_duration ?? a.minDuration)}</td>
-                <td style={{ ...td, color: '#888' }}>{fmtDuration(a.max_duration_sec ?? a.max_duration ?? a.maxDuration)}</td>
-                <td style={td}>{fmtDuration(a.median_duration_sec ?? a.median_duration ?? a.medianDuration)}</td>
-                <td style={td}>
-                  <span style={{ background: badge.bg, color: badge.color, fontSize: 11, padding: '2px 8px', borderRadius: 3, fontWeight: 500 }}>
+                <td className="px-2.5 py-2.5 border-b border-gray-100 text-gray-400 whitespace-nowrap">{fmtDuration(a.min_duration_sec ?? a.min_duration ?? a.minDuration)}</td>
+                <td className="px-2.5 py-2.5 border-b border-gray-100 text-gray-400 whitespace-nowrap">{fmtDuration(a.max_duration_sec ?? a.max_duration ?? a.maxDuration)}</td>
+                <td className="px-2.5 py-2.5 border-b border-gray-100 text-gray-600 whitespace-nowrap">{fmtDuration(a.median_duration_sec ?? a.median_duration ?? a.medianDuration)}</td>
+                <td className="px-2.5 py-2.5 border-b border-gray-100 whitespace-nowrap">
+                  <span className="text-[11px] px-2 py-0.5 rounded font-medium" style={{ background: badge.bg, color: badge.color }}>
                     {badge.label}
                   </span>
                 </td>
@@ -110,6 +129,8 @@ function AgentTable({ agents }) {
 }
 
 // ─── Dashboard principal ──────────────────────────────────────
+const inputCls = 'px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 bg-white outline-none focus:border-[#053E68] transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50';
+
 export default function DashboardView() {
   const { authToken, logout } = useAuth();
 
@@ -177,8 +198,15 @@ export default function DashboardView() {
     name: a.agent_name ?? a.name ?? a.full_name ?? `Agente ${a.user_id}`,
   })), [agentStats]);
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const handleFilterChange = (key, val) => {
+    // Ninguna fecha puede ser posterior a hoy.
+    if ((key === 'dateFrom' || key === 'dateTo') && val && val > today) val = today;
     const next = { ...filters, [key]: val };
+    // La fecha de inicio no puede ser mayor a la final: ajustamos el otro extremo.
+    if (key === 'dateFrom' && next.dateTo && val && val > next.dateTo) next.dateTo = val;
+    if (key === 'dateTo'   && next.dateFrom && val && val < next.dateFrom) next.dateFrom = val;
     setFilters(next);
     fetchAll(next);
   };
@@ -228,97 +256,105 @@ export default function DashboardView() {
 
   const hasFilters = filters.dateFrom || filters.dateTo || filters.userId;
 
-  // ─── Estilos ────────────────────────────────────────────
-  const section = { marginBottom: '1.75rem' };
-  const sTitle  = { fontSize: 11, fontWeight: 500, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px', paddingBottom: 6, borderBottom: '0.5px solid #e5e5e5' };
-  const grid = cols => ({ display: 'grid', gridTemplateColumns: cols, gap: 10 });
-
   // ─── Estados de carga/error ─────────────────────────────
   if (loading && !k) return (
-    <div style={{ padding: '3rem', textAlign: 'center', color: '#888' }}>
-      <RefreshCw style={{ display: 'inline', animation: 'spin 1s linear infinite', width: 32, height: 32 }} />
-      <p style={{ marginTop: 12 }}>Cargando tablero…</p>
+    <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+      <RefreshCw className="w-8 h-8 animate-spin" />
+      <p className="mt-3 text-sm">Cargando tablero…</p>
     </div>
   );
 
   if (error) return (
-    <div style={{ padding: '2rem', color: '#A32D2D', background: '#FCEBEB', borderRadius: 8 }}>
+    <div className="p-6 text-red-700 bg-red-50 border border-red-200 rounded-2xl max-w-[1280px] mx-auto">
       Error: {error}
     </div>
   );
 
   return (
-    <div style={{ padding: '0.5rem', fontFamily: 'system-ui, sans-serif', maxWidth: 1280, margin: '0 auto' }}>
+    <div className="max-w-[1280px] mx-auto space-y-5">
 
       {/* Header + filtros */}
-      <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div>
-          <p style={{ fontSize: 11, fontWeight: 500, color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 2px' }}>
-            TABLERO DE GESTIÓN TELEFÓNICA
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">
+            Tablero de gestión telefónica
           </p>
-          <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Rendimiento de Llamadas</h1>
+          <h1 className="text-2xl font-bold text-[#053E68]">Rendimiento de Llamadas</h1>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="date" value={filters.dateFrom}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={filters.dateFrom}
+            max={filters.dateTo || today}
             onChange={e => handleFilterChange('dateFrom', e.target.value)}
-            style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '0.5px solid #ccc' }} />
-          <span style={{ fontSize: 12, color: '#aaa' }}>—</span>
-          <input type="date" value={filters.dateTo}
+            className={inputCls}
+          />
+          <span className="text-sm text-gray-300">—</span>
+          <input
+            type="date"
+            value={filters.dateTo}
+            min={filters.dateFrom || undefined}
+            max={today}
             onChange={e => handleFilterChange('dateTo', e.target.value)}
-            style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '0.5px solid #ccc' }} />
+            className={inputCls}
+          />
 
-          {agentOptions.length > 0 && (
-            <select value={filters.userId}
-              onChange={e => handleFilterChange('userId', e.target.value)}
-              style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '0.5px solid #ccc' }}>
-              <option value="">Todos los agentes</option>
-              {agentOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          )}
+          <select
+            value={filters.userId}
+            onChange={e => handleFilterChange('userId', e.target.value)}
+            disabled={agentOptions.length === 0}
+            className={inputCls}
+          >
+            <option value="">Todos los agentes</option>
+            {agentOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
 
-          {hasFilters && (
-            <button onClick={clearFilters}
-              style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '0.5px solid #ccc', cursor: 'pointer', background: '#fff' }}>
-              Limpiar
-            </button>
-          )}
+          <button
+            onClick={clearFilters}
+            disabled={!hasFilters}
+            className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
+          >
+            <X className="w-3.5 h-3.5" />
+            Limpiar
+          </button>
 
-          <button onClick={() => fetchAll(filters)} disabled={loading}
-            style={{ fontSize: 12, padding: '4px 12px', borderRadius: 6, border: 'none', background: loading ? '#aaa' : C.total, color: '#fff', cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-            {loading && <RefreshCw style={{ width: 12, height: 12, animation: 'spin 1s linear infinite' }} />}
+          <button
+            onClick={() => fetchAll(filters)}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-[#053E68] text-white font-medium hover:bg-[#06497c] transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
         </div>
       </div>
 
-      {/* KPIs fila 1 — solo si hay datos */}
+      {/* KPIs — solo si hay datos */}
       {k && (
-        <div style={section}>
-          <p style={sTitle}>Resumen general</p>
-          <div style={{ ...grid('repeat(5, minmax(0,1fr))'), marginBottom: 10 }}>
+        <Section title="Resumen general">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-2.5">
             <KpiCard label="Total llamadas"     value={k.total}         sub="período seleccionado" />
-            <KpiCard label="Completadas"        value={k.completed}     sub={`${k.ringing} activas`}       accent="blue" />
-            <KpiCard label="Efectivas ≥30s"    value={k.effective}     sub="de completadas"               accent="green" />
-            <KpiCard label="No efectivas <30s" value={k.ineffective}   sub="contacto no logrado"          accent="red" />
+            <KpiCard label="Completadas"        value={k.completed}     sub={`${k.ringing} activas`}      accent="blue" />
+            <KpiCard label="Efectivas ≥30s"    value={k.effective}     sub="de completadas"              accent="green" />
+            <KpiCard label="No efectivas <30s" value={k.ineffective}   sub="contacto no logrado"         accent="red" />
             <KpiCard label="Eficiencia"
               value={`${k.efficiencyPct}%`}
               sub="efectivas / completadas"
               accent={k.efficiencyPct >= 70 ? 'green' : k.efficiencyPct >= 40 ? 'amber' : 'red'} />
           </div>
-          <div style={grid('repeat(4, minmax(0,1fr))')}>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
             <KpiCard label="Duración mínima"   value={fmtDuration(k.minDuration)}    sub="llamada más corta" />
             <KpiCard label="Duración máxima"   value={fmtDuration(k.maxDuration)}    sub="llamada más larga"  accent="amber" />
             <KpiCard label="Mediana duración"  value={fmtDuration(k.medianDuration)} sub="valor central"      accent="blue" />
             <KpiCard label="Promedio duración" value={fmtDuration(k.avgDuration)}    sub="influido por outliers" />
           </div>
-        </div>
+        </Section>
       )}
 
       {/* Tendencia diaria */}
       {daily.length > 0 && (
-        <div style={section}>
-          <p style={sTitle}>Tendencia diaria</p>
+        <Section title="Tendencia diaria">
           <ResponsiveContainer width="100%" height={220}>
             <ComposedChart data={daily} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -330,14 +366,13 @@ export default function DashboardView() {
               <Area dataKey="ineffective" fill="rgba(226,75,74,.12)" stroke={C.ineffective} strokeWidth={2} name="No efectivas" />
             </ComposedChart>
           </ResponsiveContainer>
-        </div>
+        </Section>
       )}
 
       {/* Distribución duración + por hora */}
       {(durationBuckets.length > 0 || byHour.length > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: '1.75rem' }}>
-          <div>
-            <p style={sTitle}>Distribución por duración</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <Section title="Distribución por duración">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={durationBuckets} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -349,34 +384,31 @@ export default function DashboardView() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-          <div>
-            <p style={sTitle}>Distribución por hora del día</p>
+          </Section>
+          <Section title="Distribución por hora del día">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={byHour} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey={byHour[0] ? (Object.keys(byHour[0]).find(k => k.includes('hour')) ?? 'hour') : 'hour'} tick={{ fontSize: 11 }} />
+                <XAxis dataKey={byHour[0] ? (Object.keys(byHour[0]).find(key => key.includes('hour')) ?? 'hour') : 'hour'} tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip formatter={v => [`${v} llamadas`]} />
                 <Bar dataKey="count" fill={C.total} radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </Section>
         </div>
       )}
 
       {/* Tabla de agentes */}
-      <div style={section}>
-        <p style={sTitle}>Rendimiento por agente</p>
+      <Section title="Rendimiento por agente">
         <AgentTable agents={agentStats} />
-      </div>
+      </Section>
 
       {/* Llamadas por campaña + Follow-ups */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-        <div style={section}>
-          <p style={sTitle}>Llamadas por campaña</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Section title="Llamadas por campaña">
           {campStats.length === 0
-            ? <p style={{ color: '#aaa', fontSize: 13 }}>Sin datos de campañas</p>
+            ? <p className="text-gray-400 text-sm">Sin datos de campañas</p>
             : (
               <ResponsiveContainer width="100%" height={Math.max(200, campStats.length * 44)}>
                 <BarChart data={campStats} layout="vertical" margin={{ top: 4, right: 4, left: 8, bottom: 0 }}>
@@ -390,11 +422,10 @@ export default function DashboardView() {
               </ResponsiveContainer>
             )
           }
-        </div>
+        </Section>
 
-        <div style={section}>
-          <p style={sTitle}>Seguimientos (follow-ups)</p>
-          <div style={{ ...grid('repeat(3,1fr)'), marginBottom: 14 }}>
+        <Section title="Seguimientos (follow-ups)">
+          <div className="grid grid-cols-3 gap-2.5 mb-3.5">
             <KpiCard label="Total"       value={fu.total} />
             <KpiCard label="Completados" value={fu.completed}
               sub={fu.total > 0 ? `${Math.round((fu.completed / fu.total) * 100)}%` : '—'}
@@ -420,7 +451,7 @@ export default function DashboardView() {
               <Legend wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
-        </div>
+        </Section>
       </div>
 
     </div>

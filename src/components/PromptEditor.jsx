@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Check, RefreshCw, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 import VariablePalette from './VariablePalette.jsx';
@@ -99,118 +100,129 @@ export default function PromptEditor({ promptId, onSaved, onCancel }) {
   };
 
   if (!prompt && promptId) return (
-    <p style={{ color: '#888', padding: '2rem', textAlign: 'center' }}>Cargando...</p>
+    <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+      <RefreshCw className="w-8 h-8 animate-spin" />
+      <p className="mt-3 text-sm">Cargando prompt…</p>
+    </div>
   );
 
   return (
-    <div style={{ display: 'flex', gap: 16, height: '78vh' }}>
+    <div className="space-y-4">
 
-      {/* ── Editor principal ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h3 style={{ margin: 0 }}>
-              {prompt?.name || 'Nuevo prompt'}
-              {prompt && (
-                <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>
-                  v{prompt.version}
-                </span>
-              )}
-            </h3>
-            <span style={{ fontSize: 12, color: '#aaa' }}>{prompt?.agent_type}</span>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={onCancel}
+            className="p-2 text-gray-500 hover:text-[#053E68] hover:bg-gray-100 rounded-lg transition flex-shrink-0"
+            title="Volver"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="flex items-center justify-center w-10 h-10 bg-[#053E68]/5 rounded-xl flex-shrink-0">
+            <FileText className="w-5 h-5 text-[#053E68]" />
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={onCancel}
-              style={{ padding: '6px 14px', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', background: '#fff' }}
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                padding: '6px 14px', background: saving ? '#888' : '#0055cc',
-                color: '#fff', border: 'none', borderRadius: 4, cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {saving ? 'Guardando...' : 'Guardar'}
-            </button>
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-[#053E68] leading-tight truncate">
+              {prompt?.name || 'Nuevo prompt'}
+              {prompt && <span className="text-xs font-medium text-gray-400 ml-2">v{prompt.version}</span>}
+            </h3>
+            <p className="text-xs text-gray-400 truncate">{prompt?.agent_type || 'Configura un nuevo template'}</p>
           </div>
         </div>
-
-        {error && (
-          <div style={{ background: '#fff0f0', border: '1px solid #ffaaaa',
-            borderRadius: 4, padding: '8px 12px', color: '#cc0000', fontSize: 13 }}>
-            {error}
-          </div>
-        )}
-
-        {/* Campos solo visibles al crear un prompt nuevo */}
-        {!promptId && (
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 4 }}>
-                Nombre *
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Ej: Agente cobros Guatemala"
-                style={{ width: '100%', padding: '7px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' }}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 4 }}>
-                Tipo de agente (agent_type) *
-              </label>
-              <input
-                type="text"
-                value={agentType}
-                onChange={e => setAgentType(e.target.value)}
-                placeholder="Ej: cobros, ventas, soporte"
-                style={{ width: '100%', padding: '7px 10px', border: '1px solid #ccc', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Textarea */}
-        <textarea
-          ref={textareaRef}
-          value={template}
-          onChange={handleChange}
-          placeholder="Escribe el prompt aquí. Usa el panel de variables para insertar {{variables}}."
-          style={{
-            flex: 1, fontFamily: 'monospace', fontSize: 13,
-            padding: 12, borderRadius: 6, border: '1px solid #ccc',
-            resize: 'none', lineHeight: 1.6,
-          }}
-        />
-
-        {/* Preview colapsable */}
-        <details>
-          <summary style={{ cursor: 'pointer', fontWeight: 600, userSelect: 'none' }}>
-            Preview con datos de ejemplo
-          </summary>
-          <pre style={{
-            background: '#f8f8f8', padding: 12, borderRadius: 6, marginTop: 8,
-            fontSize: 12, whiteSpace: 'pre-wrap', maxHeight: 200,
-            overflowY: 'auto', border: '1px solid #e0e0e0',
-          }}>
-            {preview}
-          </pre>
-          <p style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-            {'【valor】'} = variable reconocida &nbsp;|&nbsp; ⚠️{'{{variable}}'}⚠️ = variable no reconocida
-          </p>
-        </details>
+        <div className="flex gap-2 flex-shrink-0">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {saving
+              ? <><RefreshCw className="w-4 h-4 animate-spin" /> Guardando…</>
+              : <><Check className="w-4 h-4" /> Guardar</>
+            }
+          </button>
+        </div>
       </div>
 
-      {/* ── Paleta de variables ── */}
-      <VariablePalette variables={variables} onInsert={insertVariable} />
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-col lg:flex-row gap-4 lg:h-[68vh]">
+
+        {/* ── Editor principal ── */}
+        <div className="flex-1 flex flex-col gap-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 min-w-0">
+
+          {/* Campos solo visibles al crear un prompt nuevo */}
+          {!promptId && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Nombre *
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Ej: Agente cobros Guatemala"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  Tipo de agente (agent_type) *
+                </label>
+                <input
+                  type="text"
+                  value={agentType}
+                  onChange={e => setAgentType(e.target.value)}
+                  placeholder="Ej: cobros, ventas, soporte"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Textarea */}
+          <div className="flex-1 flex flex-col min-h-[240px]">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+              Template
+            </label>
+            <textarea
+              ref={textareaRef}
+              value={template}
+              onChange={handleChange}
+              placeholder="Escribe el prompt aquí. Usa el panel de variables para insertar {{variables}}."
+              className="flex-1 w-full font-mono text-[13px] leading-relaxed p-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#053E68] transition resize-none bg-gray-50/50"
+            />
+          </div>
+
+          {/* Preview colapsable */}
+          <details className="group">
+            <summary className="cursor-pointer select-none text-sm font-semibold text-[#053E68] flex items-center gap-1.5">
+              <span className="transition-transform group-open:rotate-90">▸</span>
+              Preview con datos de ejemplo
+            </summary>
+            <pre className="bg-gray-50 border border-gray-100 rounded-xl p-3 mt-2 text-xs whitespace-pre-wrap max-h-52 overflow-y-auto">
+              {preview}
+            </pre>
+            <p className="text-[11px] text-gray-400 mt-1.5">
+              {'【valor】'} = variable reconocida &nbsp;|&nbsp; ⚠️{'{{variable}}'}⚠️ = variable no reconocida
+            </p>
+          </details>
+        </div>
+
+        {/* ── Paleta de variables ── */}
+        <VariablePalette variables={variables} onInsert={insertVariable} />
+      </div>
     </div>
   );
 }

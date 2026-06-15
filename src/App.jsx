@@ -128,11 +128,37 @@ function Layout() {
 
 function ComingSoon({ Icon, title }) {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="text-center">
-        <Icon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">{title}</h3>
-        <p className="text-gray-500">Próximamente disponible</p>
+    <div className="flex items-center justify-center min-h-[70vh] px-4">
+      <div className="relative w-full max-w-md overflow-hidden bg-white border border-gray-100 rounded-3xl shadow-sm px-8 py-12 text-center">
+        {/* Decorative blobs */}
+        <div className="absolute -top-16 -right-16 w-48 h-48 bg-[#F4CD04] rounded-full opacity-[0.07]" />
+        <div className="absolute -bottom-20 -left-16 w-52 h-52 bg-[#053E68] rounded-full opacity-[0.05]" />
+
+        <div className="relative z-10 flex flex-col items-center">
+          {/* Icon badge */}
+          <div className="relative mb-6">
+            <div className="flex items-center justify-center w-20 h-20 bg-[#053E68]/5 rounded-2xl">
+              <Icon className="w-10 h-10 text-[#053E68]" />
+            </div>
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#F4CD04] rounded-full ring-4 ring-white" />
+          </div>
+
+          {/* Badge */}
+          <span className="inline-flex items-center gap-2 bg-[#F4CD04]/15 text-[#8a6d00] text-[11px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full mb-4">
+            <span className="w-1.5 h-1.5 bg-[#F4CD04] rounded-full" />
+            En construcción
+          </span>
+
+          <h3 className="text-2xl font-bold text-[#053E68] mb-2">{title}</h3>
+          <p className="text-gray-400 text-sm max-w-xs">
+            Estamos trabajando en esta sección. Estará disponible muy pronto.
+          </p>
+
+          {/* Progress hint */}
+          <div className="mt-7 w-40 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full w-2/5 bg-[#F4CD04] rounded-full" />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,54 +1,59 @@
-import { X, RefreshCw, Users } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Users } from 'lucide-react';
 
 export default function CampaignContactsView({ campaign, contacts, calls, loading, onBack, onRefresh, onViewCallAnalysis }) {
   if (!campaign) return null;
 
   return (
-    <div className="w-full mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="max-w-[1280px] mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition mb-2"
+            className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-[#053E68] transition mb-3"
           >
-            <X className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
             Volver a Campañas
           </button>
-          <h2 className="text-2xl font-bold text-gray-800">{campaign.name}</h2>
-          <p className="text-sm text-gray-500">Contactos de la campaña</p>
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-7 bg-[#F4CD04] rounded-full" />
+            <div>
+              <h2 className="text-xl font-bold text-[#053E68] leading-tight">{campaign.name}</h2>
+              <p className="text-sm text-gray-400 mt-0.5">Contactos de la campaña</p>
+            </div>
+          </div>
         </div>
         <button
           onClick={onRefresh}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualizar
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Total</p>
-          <p className="text-2xl font-bold text-gray-800">{campaign.contacts}</p>
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
+          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Total</p>
+          <p className="text-2xl font-bold text-[#053E68] tabular-nums">{campaign.contacts}</p>
         </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Completadas</p>
-          <p className="text-2xl font-bold text-green-600">{campaign.completed}</p>
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
+          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Completadas</p>
+          <p className="text-2xl font-bold text-green-600 tabular-nums">{campaign.completed}</p>
         </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Pendientes</p>
-          <p className="text-2xl font-bold text-yellow-600">{campaign.pending}</p>
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
+          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Pendientes</p>
+          <p className="text-2xl font-bold text-yellow-600 tabular-nums">{campaign.pending}</p>
         </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-1">Progreso</p>
-          <p className="text-2xl font-bold text-blue-600">
+        <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100">
+          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Progreso</p>
+          <p className="text-2xl font-bold text-[#053E68] tabular-nums">
             {campaign.contacts > 0 ? Math.round((campaign.completed / campaign.contacts) * 100) : 0}%
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
         <div className="p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
@@ -57,7 +62,9 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
             </div>
           ) : contacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
-              <Users className="w-12 h-12 text-gray-400 mb-4" />
+              <div className="p-4 bg-[#053E68]/5 rounded-full mb-4">
+                <Users className="w-10 h-10 text-[#053E68]" />
+              </div>
               <p className="text-gray-500">No hay contactos en esta campaña</p>
             </div>
           ) : (
@@ -97,7 +104,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                             const call = calls.find(c => c.id === contact.call_id);
                             if (call) onViewCallAnalysis(call);
                           }}
-                          className="w-full px-3 py-2 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition font-medium"
+                          className="w-full px-3 py-2 text-sm bg-[#053E68]/5 text-[#053E68] rounded-lg hover:bg-[#053E68]/10 transition font-medium"
                         >
                           Ver llamada
                         </button>
@@ -116,13 +123,9 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                 <table className="w-full min-w-[980px]">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Lote</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Cliente</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Teléfono</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Estado</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Total</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Llamada</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Acciones</th>
+                      {['Lote', 'Cliente', 'Teléfono', 'Estado', 'Total', 'Llamada', 'Acciones'].map(h => (
+                        <th key={h} className="text-left py-3 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -151,7 +154,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                                 const call = calls.find(c => c.id === contact.call_id);
                                 if (call) onViewCallAnalysis(call);
                               }}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              className="text-[#053E68] hover:underline text-sm font-medium"
                             >
                               Ver llamada
                             </button>

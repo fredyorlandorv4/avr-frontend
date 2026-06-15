@@ -67,7 +67,6 @@ export default function Sidebar({ sidebarOpen, onClose }) {
             <NavLink
               key={id}
               to={path}
-              end
               onClick={onClose}
               className={({ isActive }) =>
                 `group w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
