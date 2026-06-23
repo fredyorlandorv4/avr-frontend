@@ -354,9 +354,16 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
                         <p className="text-xs text-gray-400 mt-1">ID: {call.call_id}</p>
                       </div>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium self-start ${getStatusColor(call.status)}`}>
-                      {getStatusLabel(call.status)}
-                    </span>
+                    <div className="flex items-center gap-2 self-start">
+                      {call.area_name && (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#F4CD04]/20 text-[#7a6800] capitalize">
+                          {call.area_name}
+                        </span>
+                      )}
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(call.status)}`}>
+                        {getStatusLabel(call.status)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Métricas */}
