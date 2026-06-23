@@ -205,8 +205,13 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
 // ─── App shell (holds shared state + data loaders, defines routes) ────────────
 
 function AppShell() {
-  const { authToken, isLoggedIn, logout, isAdmin } = useAuth();
+  const { authToken, isLoggedIn, logout, isAdmin, areaName } = useAuth();
   const { effectiveAreaId } = useArea();
+
+  // Restricciones del área de marketing (telemarketing): no crea campañas
+  // ni accede a follow-ups / proyectos.
+  const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
+  const canCreateCampaigns = !isTelemarketing;
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -486,7 +491,9 @@ function AppShell() {
           } />
 
           <Route path="/campaigns/new" element={
-            <CreateCampaignPage loadCampaigns={loadCampaigns} />
+            canCreateCampaigns
+              ? <CreateCampaignPage loadCampaigns={loadCampaigns} />
+              : <Navigate to="/campaigns" replace />
           } />
 
           <Route path="/campaigns/:id/contacts" element={
@@ -501,20 +508,24 @@ function AppShell() {
           } />
 
           <Route path="/followups" element={
-            <FollowUpsView
-              followUps={followUps}
-              followUpStats={followUpStats}
-              isMobile={isMobile}
-              onToggleComplete={toggleFollowUpCompletion}
-              onRefresh={() => {
-                loadFollowUps();
-                loadFollowUpStats();
-                showToast('Follow-ups actualizados', 'success');
-              }}
-            />
+            isTelemarketing ? <Navigate to="/dashboard" replace /> : (
+              <FollowUpsView
+                followUps={followUps}
+                followUpStats={followUpStats}
+                isMobile={isMobile}
+                onToggleComplete={toggleFollowUpCompletion}
+                onRefresh={() => {
+                  loadFollowUps();
+                  loadFollowUpStats();
+                  showToast('Follow-ups actualizados', 'success');
+                }}
+              />
+            )
           } />
 
-          <Route path="/projects" element={<ProjectsView />} />
+          <Route path="/projects" element={
+            isTelemarketing ? <Navigate to="/dashboard" replace /> : <ProjectsView />
+          } />
 
           <Route path="/prompts" element={
             isAdmin ? <PromptsView /> : <Navigate to="/dashboard" replace />

@@ -1,7 +1,12 @@
 import { Target, RefreshCw, Play, Briefcase } from 'lucide-react';
 import AreaFilter from './AreaFilter.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function CampaignListView({ campaigns, loading, onRefresh, onCreateNew, onViewContacts, onStartCampaign }) {
+  const { areaName } = useAuth();
+  // Los usuarios del área de marketing no pueden crear campañas.
+  const canCreateCampaigns = (areaName || '').toLowerCase() !== 'telemarketing';
+
   const getStatusLabel = (status) => {
     const map = { active: 'Activa', paused: 'Pausada', completed: 'Finalizada', created: 'Creada' };
     return map[status] || status;
@@ -34,13 +39,15 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Actualizar
           </button>
-          <button
-            onClick={onCreateNew}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium"
-          >
-            <Target className="w-4 h-4" />
-            Nueva Campaña
-          </button>
+          {canCreateCampaigns && (
+            <button
+              onClick={onCreateNew}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium"
+            >
+              <Target className="w-4 h-4" />
+              Nueva Campaña
+            </button>
+          )}
         </div>
       </div>
 

@@ -3,6 +3,8 @@ import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Bri
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_ONLY = new Set(['reports', 'prompts', 'users', 'settings']);
+// El área de marketing (telemarketing) no accede a follow-ups ni proyectos.
+const TELEMARKETING_HIDDEN = new Set(['followups', 'projects']);
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard',           path: '/dashboard', Icon: Activity  },
@@ -22,7 +24,13 @@ export default function Sidebar({ sidebarOpen, onClose }) {
 
   const panelLabel = isSystem ? 'Panel de Gestiones' : (areaName || 'Panel de Gestiones');
 
-  const visibleItems = NAV_ITEMS.filter(({ id }) => !ADMIN_ONLY.has(id) || isAdmin);
+  const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
+
+  const visibleItems = NAV_ITEMS.filter(({ id }) => {
+    if (ADMIN_ONLY.has(id) && !isAdmin) return false;
+    if (isTelemarketing && TELEMARKETING_HIDDEN.has(id)) return false;
+    return true;
+  });
 
   return (
     <>
