@@ -5,7 +5,9 @@ import {
 } from 'recharts';
 import { RefreshCw, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
+import AreaFilter from './AreaFilter.jsx';
 
 // ─── Colores ──────────────────────────────────────────────────
 const C = {
@@ -38,6 +40,7 @@ function buildQuery(params) {
   if (params.dateFrom) q.set('date_from', params.dateFrom);
   if (params.dateTo)   q.set('date_to',   params.dateTo);
   if (params.userId)   q.set('user_id',   params.userId);
+  if (params.areaId != null && params.areaId !== '') q.set('area_id', params.areaId);
   const str = q.toString();
   return str ? `?${str}` : '';
 }
@@ -133,8 +136,16 @@ const inputCls = 'px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-
 
 export default function DashboardView() {
   const { authToken, logout } = useAuth();
+  const { effectiveAreaId } = useArea();
 
-  const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', userId: '' });
+  // Por defecto: últimos 30 días (coincide con el default del backend y se ve reflejado en los inputs).
+  const [filters, setFilters] = useState(() => {
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 29);
+    return { dateFrom: fmt(from), dateTo: fmt(to), userId: '' };
+  });
 
   const [kpis,         setKpis]         = useState(null);
   const [daily,        setDaily]        = useState([]);
@@ -151,8 +162,10 @@ export default function DashboardView() {
     setLoading(true);
     setError(null);
 
-    const qFull    = buildQuery(f);                                          // date + user
-    const qDateOnly= buildQuery({ dateFrom: f.dateFrom, dateTo: f.dateTo }); // solo date
+    // Área efectiva (admin: su selección; resto: su propia área).
+    const areaScope = effectiveAreaId ?? undefined;
+    const qFull    = buildQuery({ ...f, areaId: areaScope });                                  // date + user + area
+    const qDateOnly= buildQuery({ dateFrom: f.dateFrom, dateTo: f.dateTo, areaId: areaScope }); // date + area
 
     try {
       const opts = { token: authToken, onUnauthorized: logout };
@@ -188,7 +201,7 @@ export default function DashboardView() {
     } finally {
       setLoading(false);
     }
-  }, [authToken, logout]);
+  }, [authToken, logout, effectiveAreaId]);
 
   useEffect(() => { fetchAll(filters); }, [fetchAll]);
 
@@ -199,6 +212,15 @@ export default function DashboardView() {
   })), [agentStats]);
 
   const today = new Date().toISOString().slice(0, 10);
+  const fmtDate = (d) => d.toISOString().slice(0, 10);
+
+  // Rango por defecto (últimos 30 días) y atajos rápidos
+  const defaultRange = useMemo(() => {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 29);
+    return { dateFrom: fmtDate(from), dateTo: fmtDate(to) };
+  }, []);
 
   const handleFilterChange = (key, val) => {
     // Ninguna fecha puede ser posterior a hoy.
@@ -212,7 +234,7 @@ export default function DashboardView() {
   };
 
   const clearFilters = () => {
-    const next = { dateFrom: '', dateTo: '', userId: '' };
+    const next = { ...defaultRange, userId: '' };
     setFilters(next);
     fetchAll(next);
   };
@@ -254,7 +276,9 @@ export default function DashboardView() {
     pending:   fuSummary.pending   ?? 0,
   } : { total: 0, completed: 0, pending: 0 };
 
-  const hasFilters = filters.dateFrom || filters.dateTo || filters.userId;
+  const hasFilters = filters.userId
+    || filters.dateFrom !== defaultRange.dateFrom
+    || filters.dateTo !== defaultRange.dateTo;
 
   // ─── Estados de carga/error ─────────────────────────────
   if (loading && !k) return (
@@ -283,6 +307,7 @@ export default function DashboardView() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <AreaFilter />
           <input
             type="date"
             value={filters.dateFrom}

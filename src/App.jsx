@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation, useNavigate, useParams } 
 import { Phone, Bell, Menu, X, BarChart3, Users, Settings } from 'lucide-react';
 
 import { useAuth } from './context/AuthContext.jsx';
+import { useArea } from './context/AreaContext.jsx';
 import { apiFetch } from './api.js';
 
 import LoginPage from './components/LoginPage.jsx';
@@ -18,6 +19,7 @@ import CampaignContactsView from './components/CampaignContactsView.jsx';
 import FollowUpsView from './components/FollowUpsView.jsx';
 import ProjectsView from './components/ProjectsView.jsx';
 import PromptsView from './components/PromptsView.jsx';
+import UsersView from './components/UsersView.jsx';
 
 const PATH_LABELS = {
   '/dashboard':     'Dashboard',
@@ -184,8 +186,8 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
   const campaign = state?.campaign ?? campaigns.find(c => c.id === campaignId);
 
   useEffect(() => {
-    if (campaignId) loadCampaignContacts(campaignId);
-  }, [campaignId]);
+    if (campaignId) loadCampaignContacts(campaignId, campaign?.areaName);
+  }, [campaignId, campaign?.areaName]);
 
   return (
     <CampaignContactsView
@@ -194,7 +196,7 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
       calls={calls}
       loading={loading}
       onBack={() => navigate('/campaigns')}
-      onRefresh={() => loadCampaignContacts(campaignId)}
+      onRefresh={() => loadCampaignContacts(campaignId, campaign?.areaName)}
       onViewCallAnalysis={onViewCallAnalysis}
     />
   );
@@ -204,7 +206,12 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
 
 function AppShell() {
   const { authToken, isLoggedIn, logout, isAdmin } = useAuth();
+  const { effectiveAreaId } = useArea();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  // Área a aplicar en las consultas. null = todas (no se envía el filtro).
+  const areaParam = (effectiveAreaId != null) ? `&area_id=${effectiveAreaId}` : '';
 
   const [loading, setLoading]   = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -233,7 +240,7 @@ function AppShell() {
     if (!authToken) return;
     if (!silent) setLoading(true);
     try {
-      const res = await apiFetch('/api/v1/calls/admin/all?skip=0&limit=100', {
+      const res = await apiFetch(`/api/v1/calls/admin/all?skip=0&limit=100${areaParam}`, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -243,12 +250,12 @@ function AppShell() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [authToken, logout]);
+  }, [authToken, logout, areaParam]);
 
   const loadCampaigns = useCallback(async () => {
     if (!authToken) return;
     try {
-      const res = await apiFetch('/api/v1/campaigns?skip=0&limit=100', {
+      const res = await apiFetch(`/api/v1/campaigns?skip=0&limit=100${areaParam}`, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -260,6 +267,7 @@ function AppShell() {
           title:       c.title        || '',
           description: c.description  || '',
           projectName: c.project_name || c.project?.name || '',
+          areaName:    c.area_name || c.area?.area || '',
           status:      c.status,
           contacts:    c.total_contacts   || 0,
           completed:   c.called_contacts  || 0,
@@ -270,13 +278,17 @@ function AppShell() {
     } catch (err) {
       if (err.message !== 'Unauthorized') console.error('Error loading campaigns:', err);
     }
-  }, [authToken, logout]);
+  }, [authToken, logout, areaParam]);
 
-  const loadCampaignContacts = useCallback(async (campaignId) => {
+  const loadCampaignContacts = useCallback(async (campaignId, areaName = '') => {
     if (!authToken || !campaignId) return;
+    const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
+    const url = isTelemarketing
+      ? `/api/v1/campaigns/telemarketing/${campaignId}`
+      : `/api/v1/campaigns/contacts_by_campaing/${campaignId}`;
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/v1/campaigns/contacts_by_campaing/${campaignId}`, {
+      const res = await apiFetch(url, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -388,18 +400,18 @@ function AppShell() {
 
   useEffect(() => {
     if (!isLoggedIn || !authToken) return;
-    loadCalls();
-    loadCampaigns();
-    loadFollowUps();
-    loadFollowUpStats();
-    const interval = setInterval(() => {
-      loadCalls({ silent: true });
+
+    // Carga perezosa: sólo los datos que la ruta actual necesita, una vez al entrar
+    // (o cuando cambia el área). El refresco manual se hace con el botón "Actualizar".
+    if (pathname.startsWith('/calls')) {
+      loadCalls();
+    } else if (pathname.startsWith('/campaigns') && pathname !== '/campaigns/new') {
       loadCampaigns();
+    } else if (pathname.startsWith('/followups')) {
       loadFollowUps();
       loadFollowUpStats();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [isLoggedIn, authToken]);
+    }
+  }, [isLoggedIn, authToken, pathname, loadCalls, loadCampaigns, loadFollowUps, loadFollowUpStats]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
@@ -509,7 +521,7 @@ function AppShell() {
           } />
 
           <Route path="/users" element={
-            isAdmin ? <ComingSoon Icon={Users} title="Gestión de Usuarios" /> : <Navigate to="/dashboard" replace />
+            isAdmin ? <UsersView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="/settings" element={

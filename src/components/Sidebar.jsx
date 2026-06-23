@@ -18,7 +18,9 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ sidebarOpen, onClose }) {
 
-  const { logout, isAdmin, username, role } = useAuth();
+  const { logout, isAdmin, username, role, areaName, isSystem } = useAuth();
+
+  const panelLabel = isSystem ? 'Panel de Gestiones' : (areaName || 'Panel de Gestiones');
 
   const visibleItems = NAV_ITEMS.filter(({ id }) => !ADMIN_ONLY.has(id) || isAdmin);
 
@@ -58,7 +60,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
           </div>
           <div>
             <h1 className="text-base font-bold text-white tracking-tight leading-tight">RV4 - Call System</h1>
-            <p className="text-xs text-blue-300">Panel de Gestiones</p>
+            <p className="text-xs text-blue-300 capitalize">{panelLabel}</p>
           </div>
         </div>
 

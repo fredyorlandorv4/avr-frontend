@@ -3,6 +3,8 @@ import { ArrowLeft, RefreshCw, Users } from 'lucide-react';
 export default function CampaignContactsView({ campaign, contacts, calls, loading, onBack, onRefresh, onViewCallAnalysis }) {
   if (!campaign) return null;
 
+  const isTelemarketing = (campaign.areaName || '').toLowerCase() === 'telemarketing';
+
   return (
     <div className="max-w-[1280px] mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -67,6 +69,62 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
               </div>
               <p className="text-gray-500">No hay contactos en esta campaña</p>
             </div>
+          ) : isTelemarketing ? (
+            <>
+              {/* Telemarketing — Mobile cards */}
+              <div className="sm:hidden space-y-3">
+                {contacts.map((contact, idx) => (
+                  <div key={contact.firebase_id ?? idx} className="border border-gray-200 rounded-lg p-4 bg-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{contact.client}</p>
+                        <p className="text-xs text-gray-500 truncate">{contact.phone}</p>
+                      </div>
+                      <span className={`shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        contact.called === 1 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {contact.called === 1 ? 'Llamado' : 'Pendiente'}
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-xs text-gray-500">ID Propiedad</p>
+                      <p className="text-sm font-medium text-gray-800">{contact.property_id ?? '-'}</p>
+                    </div>
+                    <p className="mt-3 text-xs text-gray-400 truncate">Firebase: {contact.firebase_id || '-'}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Telemarketing — Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full min-w-[820px]">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      {['Cliente', 'Teléfono', 'ID Propiedad', 'Firebase ID', 'Estado'].map(h => (
+                        <th key={h} className="text-left py-3 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contacts.map((contact, idx) => (
+                      <tr key={contact.firebase_id ?? idx} className="border-b border-gray-100 hover:bg-gray-50 transition">
+                        <td className="py-3 px-4 text-sm text-gray-800">{contact.client}</td>
+                        <td className="py-3 px-4 text-sm text-gray-800">{contact.phone}</td>
+                        <td className="py-3 px-4 text-sm text-gray-800">{contact.property_id ?? '-'}</td>
+                        <td className="py-3 px-4 text-xs text-gray-500 font-mono">{contact.firebase_id || '-'}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            contact.called === 1 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {contact.called === 1 ? 'Llamado' : 'Pendiente'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
             <>
               {/* Mobile cards */}

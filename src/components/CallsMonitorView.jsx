@@ -1,6 +1,7 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Phone, FileText, BarChart3, RefreshCw, Search, X, Headphones, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import AreaFilter from './AreaFilter.jsx';
 
 const getRecordingUrl = (callId) => `/api/v1/calls/${callId}/recording/download`;
 
@@ -106,7 +107,15 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
 
   // Paginación sobre resultados filtrados
   const totalPages  = Math.max(1, Math.ceil(filteredCalls.length / PAGE_SIZE));
-  const pagedCalls  = filteredCalls.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Si los datos se reducen (refresco, cambio de área/filtro) y la página actual
+  // queda fuera de rango, volvemos a la última página válida.
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
+  const safePage    = Math.min(currentPage, totalPages);
+  const pagedCalls  = filteredCalls.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // ── Lógica del player ─────────────────────────────────────
   const handleToggleAudio = useCallback(async (call) => {
@@ -169,13 +178,16 @@ export default function CallsMonitorView({ calls, loading, onRefresh, onViewTran
               </p>
             </div>
           </div>
-          <button
-            onClick={onRefresh}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition font-medium text-sm"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <AreaFilter />
+            <button
+              onClick={onRefresh}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition font-medium text-sm"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
         </div>
 
         {/* Filtros */}

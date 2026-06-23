@@ -1,4 +1,5 @@
 import { Target, RefreshCw, Play, Briefcase } from 'lucide-react';
+import AreaFilter from './AreaFilter.jsx';
 
 export default function CampaignListView({ campaigns, loading, onRefresh, onCreateNew, onViewContacts, onStartCampaign }) {
   const getStatusLabel = (status) => {
@@ -24,7 +25,8 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
             <p className="text-sm text-gray-400 mt-0.5">{campaigns.length} campaña{campaigns.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <AreaFilter />
           <button
             onClick={onRefresh}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
@@ -63,9 +65,16 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
                     </p>
                     <p className="text-xs text-gray-400 mt-1">Creada: {campaign.created}</p>
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(campaign.status)}`}>
-                    {getStatusLabel(campaign.status)}
-                  </span>
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(campaign.status)}`}>
+                      {getStatusLabel(campaign.status)}
+                    </span>
+                    {campaign.areaName && (
+                      <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#F4CD04]/20 text-[#7a6800] capitalize">
+                        {campaign.areaName}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mb-3 space-y-1.5">
@@ -112,7 +121,8 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
                   {campaign.status !== 'active' && (
                     <button
                       onClick={() => onStartCampaign(campaign.id, campaign.name)}
-                      disabled={loading}
+                      disabled={loading || campaign.areaName?.toLowerCase() !== 'cobros'}
+                      title={campaign.areaName?.toLowerCase() !== 'cobros' ? 'Solo las campañas de cobros pueden iniciarse desde aquí' : undefined}
                       className="flex items-center justify-center gap-1 px-3 py-2 text-sm font-medium bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Play className="w-4 h-4" />

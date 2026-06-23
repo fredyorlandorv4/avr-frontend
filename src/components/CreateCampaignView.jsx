@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, FileText, RefreshCw, ChevronDown, CheckCircle2, AlertCircle, Target } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 
 export default function CreateCampaignView({ onCancel, onSuccess }) {
-  const { authToken, logout, isAdmin } = useAuth();
+  const { authToken, logout, isSystem, areaId } = useAuth();
+  const { areas } = useArea();   // lista de áreas (cargada solo para usuarios "system")
   const [campaignName, setCampaignName] = useState('');
   const [campaignTitle, setCampaignTitle] = useState('');
   const [campaignDescription, setCampaignDescription] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
-  const [areas, setAreas] = useState([]);
   const [selectedAreaId, setSelectedAreaId] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
@@ -40,27 +41,10 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
     loadProjects();
   }, []);
 
-  // Cargar áreas y fijar "cobros" como valor por defecto
+  // El usuario "system" elige el área; el resto hereda automáticamente la suya.
   useEffect(() => {
-    const loadAreas = async () => {
-      try {
-        const res = await apiFetch('/api/v1/areas', {
-          token: authToken,
-          onUnauthorized: logout,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const list = Array.isArray(data) ? data : data.items || data.results || [];
-          setAreas(list);
-          const cobros = list.find((a) => a.area === 'cobros');
-          if (cobros) setSelectedAreaId(String(cobros.id));
-        }
-      } catch (err) {
-        if (err.message !== 'Unauthorized') console.error('Error loading areas:', err);
-      }
-    };
-    loadAreas();
-  }, []);
+    if (!isSystem && areaId != null) setSelectedAreaId(String(areaId));
+  }, [isSystem, areaId]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -106,9 +90,9 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
       if (campaignDescription.trim()) formData.append('description', campaignDescription.trim());
       if (selectedProjectId)          formData.append('project_id',  selectedProjectId);
 
-      // Área: viene preseleccionada en "cobros" por defecto; solo el admin la cambia
+      // Área: el admin la elige; el resto la hereda de su usuario.
       if (!selectedAreaId) {
-        setUploadError('No se pudo determinar el área. Verifica que exista el área "cobros".');
+        setUploadError('Por favor selecciona un área.');
         setUploadLoading(false);
         return;
       }
@@ -229,23 +213,26 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
             </div>
           </div>
 
-          {/* Área: por defecto siempre "cobros"; solo el admin puede cambiarla */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Área *</label>
-            <div className="relative">
-              <select
-                value={selectedAreaId}
-                onChange={(e) => setSelectedAreaId(e.target.value)}
-                disabled={true}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition text-base appearance-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                {areas.map((area) => (
-                  <option key={area.id} value={area.id}>{area.area}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+          {/* Área: sólo el usuario "system" la elige. El resto hereda su propia área. */}
+          {isSystem && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Área *</label>
+              <div className="relative">
+                <select
+                  value={selectedAreaId}
+                  onChange={(e) => setSelectedAreaId(e.target.value)}
+                  disabled={uploadLoading}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition text-base appearance-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">-- Selecciona un área --</option>
+                  {areas.map((area) => (
+                    <option key={area.id} value={area.id}>{area.area}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Descripción */}
           <div className="lg:col-span-2">

@@ -31,7 +31,7 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        login(data.access_token, usernameField, data.role || '');
+        login(data.access_token, usernameField, data.role || '', data.area_id ?? null, data.is_system ?? false, data.area_name || '');
       } else {
         setLoginError(data.detail || 'Usuario o contraseña incorrectos');
       }
