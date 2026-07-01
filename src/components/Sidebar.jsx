@@ -3,8 +3,8 @@ import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Bri
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_ONLY = new Set(['reports', 'prompts', 'users', 'settings']);
-// El área de marketing (telemarketing) no accede a follow-ups ni proyectos.
-const TELEMARKETING_HIDDEN = new Set(['followups', 'projects']);
+// El área de marketing (telemarketing) no accede a proyectos.
+const TELEMARKETING_HIDDEN = new Set(['projects']);
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard',           path: '/dashboard', Icon: Activity  },
@@ -22,7 +22,8 @@ export default function Sidebar({ sidebarOpen, onClose }) {
 
   const { logout, isAdmin, username, role, areaName, isSystem } = useAuth();
 
-  const panelLabel = isSystem ? 'Panel de Gestiones' : (areaName || 'Panel de Gestiones');
+  const capitalizeFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+  const panelLabel = (isSystem || !areaName) ? 'Panel de Gestiones' : capitalizeFirst(areaName);
 
   const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
 
@@ -68,7 +69,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
           </div>
           <div>
             <h1 className="text-base font-bold text-white tracking-tight leading-tight">RV4 - Call System</h1>
-            <p className="text-xs text-blue-300 capitalize">{panelLabel}</p>
+            <p className="text-xs text-blue-300">{panelLabel}</p>
           </div>
         </div>
 

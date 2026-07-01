@@ -1,7 +1,7 @@
 import { Clock, RefreshCw } from 'lucide-react';
 
 function FollowUpCard({ followUp, bgColor, onToggleComplete }) {
-  const notesParts = followUp.notes.split('|');
+  const notesParts = (followUp.notes || '').split('|');
   const title = notesParts[0]?.trim() || '';
   const description = notesParts[1]?.trim() || notesParts[0]?.trim() || '';
   const scheduledDate = new Date(followUp.scheduled_date);
@@ -61,7 +61,16 @@ function FollowUpCard({ followUp, bgColor, onToggleComplete }) {
   );
 }
 
-export default function FollowUpsView({ followUps, followUpStats, onToggleComplete, onRefresh }) {
+export default function FollowUpsView({
+  followUps,
+  followUpStats,
+  onToggleComplete,
+  onRefresh,
+  showAreaFilter = false,
+  areas = [],
+  selectedAreaId = null,
+  onAreaChange,
+}) {
   const greenFollowUps     = followUps.filter(fu => fu.status === 'green'  && !fu.completed);
   const orangeFollowUps    = followUps.filter(fu => fu.status === 'orange' && !fu.completed);
   const redFollowUps       = followUps.filter(fu => fu.status === 'red'    && !fu.completed);
@@ -124,13 +133,37 @@ export default function FollowUpsView({ followUps, followUpStats, onToggleComple
             <p className="text-sm text-gray-400 mt-0.5">Sistema de gestión por estado</p>
           </div>
         </div>
-        <button
-          onClick={onRefresh}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Actualizar
-        </button>
+        <div className="flex items-center gap-3">
+          {showAreaFilter && areas.length > 0 && (
+            <div className="inline-flex items-center gap-1 bg-gray-100 rounded-xl p-1" role="tablist" aria-label="Filtrar por área">
+              {areas.map((a) => {
+                const active = a.id === selectedAreaId;
+                return (
+                  <button
+                    key={a.id}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => onAreaChange?.(a.id)}
+                    className={`px-3.5 py-1.5 rounded-lg text-sm font-medium capitalize transition ${
+                      active
+                        ? 'bg-white text-[#053E68] shadow-sm'
+                        : 'text-gray-500 hover:text-[#053E68]'
+                    }`}
+                  >
+                    {a.area}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <button
+            onClick={onRefresh}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition text-sm font-medium"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Actualizar
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

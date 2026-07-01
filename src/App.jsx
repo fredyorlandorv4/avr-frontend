@@ -205,11 +205,11 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
 // ─── App shell (holds shared state + data loaders, defines routes) ────────────
 
 function AppShell() {
-  const { authToken, isLoggedIn, logout, isAdmin, areaName } = useAuth();
-  const { effectiveAreaId } = useArea();
+  const { authToken, isLoggedIn, logout, isAdmin, isSystem, areaName } = useAuth();
+  const { effectiveAreaId, areas } = useArea();
 
   // Restricciones del área de marketing (telemarketing): no crea campañas
-  // ni accede a follow-ups / proyectos.
+  // por Excel ni accede a proyectos. Sí accede a follow-ups.
   const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
   const canCreateCampaigns = !isTelemarketing;
   const navigate = useNavigate();
@@ -231,6 +231,25 @@ function AppShell() {
   const [campaignContacts, setCampaignContacts] = useState([]);
   const [followUps, setFollowUps]               = useState([]);
   const [followUpStats, setFollowUpStats]       = useState({ total: 0, green: 0, orange: 0, red: 0, completed: 0 });
+
+  // Filtro de área SOLO para follow-ups (usuarios "system"). A diferencia del filtro
+  // global, aquí no existe la opción "todas": siempre se ve un área concreta para no
+  // saturar las tarjetas con etiquetas de área. El resto de usuarios ve su propia área
+  // (la fuerza el backend), así que no necesitan selector.
+  // Se excluye "system" (equivale a "todas"); cobros y telemarketing sí aparecen.
+  const followUpAreas = areas.filter(
+    (a) => (a.area || '').trim().toLowerCase() !== 'system'
+  );
+  const [followUpAreaId, setFollowUpAreaId] = useState(null);
+
+  // Al cargar la lista de áreas (usuario system), seleccionar la primera por defecto.
+  useEffect(() => {
+    if (isSystem && followUpAreaId == null && followUpAreas.length > 0) {
+      setFollowUpAreaId(followUpAreas[0].id);
+    }
+  }, [isSystem, followUpAreaId, followUpAreas]);
+
+  const followUpAreaParam = (isSystem && followUpAreaId != null) ? `&area_id=${followUpAreaId}` : '';
 
   // --- Helpers ---
 
@@ -314,7 +333,7 @@ function AppShell() {
   const loadFollowUps = useCallback(async () => {
     if (!authToken) return;
     try {
-      const res = await apiFetch('/api/v1/follow-ups?skip=0&limit=100', {
+      const res = await apiFetch(`/api/v1/follow-ups?skip=0&limit=100${followUpAreaParam}`, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -322,12 +341,12 @@ function AppShell() {
     } catch (err) {
       if (err.message !== 'Unauthorized') console.error('Error loading follow-ups:', err);
     }
-  }, [authToken, logout]);
+  }, [authToken, logout, followUpAreaParam]);
 
   const loadFollowUpStats = useCallback(async () => {
     if (!authToken) return;
     try {
-      const res = await apiFetch('/api/v1/follow-ups/stats', {
+      const res = await apiFetch(`/api/v1/follow-ups/stats?${followUpAreaParam.replace(/^&/, '')}`, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -335,7 +354,7 @@ function AppShell() {
     } catch (err) {
       if (err.message !== 'Unauthorized') console.error('Error loading follow-up stats:', err);
     }
-  }, [authToken, logout]);
+  }, [authToken, logout, followUpAreaParam]);
 
   const startCampaign = useCallback(async (campaignId, campaignName) => {
     if (!authToken || !campaignId) return;
@@ -508,19 +527,21 @@ function AppShell() {
           } />
 
           <Route path="/followups" element={
-            isTelemarketing ? <Navigate to="/dashboard" replace /> : (
-              <FollowUpsView
-                followUps={followUps}
-                followUpStats={followUpStats}
-                isMobile={isMobile}
-                onToggleComplete={toggleFollowUpCompletion}
-                onRefresh={() => {
-                  loadFollowUps();
-                  loadFollowUpStats();
-                  showToast('Follow-ups actualizados', 'success');
-                }}
-              />
-            )
+            <FollowUpsView
+              followUps={followUps}
+              followUpStats={followUpStats}
+              isMobile={isMobile}
+              onToggleComplete={toggleFollowUpCompletion}
+              showAreaFilter={isSystem}
+              areas={followUpAreas}
+              selectedAreaId={followUpAreaId}
+              onAreaChange={setFollowUpAreaId}
+              onRefresh={() => {
+                loadFollowUps();
+                loadFollowUpStats();
+                showToast('Follow-ups actualizados', 'success');
+              }}
+            />
           } />
 
           <Route path="/projects" element={
