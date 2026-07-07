@@ -125,17 +125,21 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
                   >
                     Ver Contactos
                   </button>
-                  {campaign.status !== 'active' && (
-                    <button
-                      onClick={() => onStartCampaign(campaign.id, campaign.name)}
-                      disabled={loading || campaign.areaName?.toLowerCase() !== 'cobros'}
-                      title={campaign.areaName?.toLowerCase() !== 'cobros' ? 'Solo las campañas de cobros pueden iniciarse desde aquí' : undefined}
-                      className="flex items-center justify-center gap-1 px-3 py-2 text-sm font-medium bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Play className="w-4 h-4" />
-                      Iniciar
-                    </button>
-                  )}
+                  <button
+                    onClick={() => onStartCampaign(campaign.id, campaign.name)}
+                    disabled={loading || campaign.status !== 'created' || campaign.areaName?.toLowerCase() !== 'cobros'}
+                    title={
+                      campaign.status !== 'created'
+                        ? 'Solo se pueden iniciar campañas en estado Creada'
+                        : campaign.areaName?.toLowerCase() !== 'cobros'
+                          ? 'Solo las campañas de cobros pueden iniciarse desde aquí'
+                          : undefined
+                    }
+                    className="flex items-center justify-center gap-1 px-3 py-2 text-sm font-medium bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Play className="w-4 h-4" />
+                    Iniciar
+                  </button>
                 </div>
               </div>
             </div>
