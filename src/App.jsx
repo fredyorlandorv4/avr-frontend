@@ -226,7 +226,9 @@ function AppShell() {
   const [showAnalysisModal, setShowAnalysisModal]           = useState(false);
   const [selectedCall, setSelectedCall]                     = useState(null);
 
-  const [calls, setCalls]                       = useState([]);
+  // El monitor de llamadas gestiona su propia data; aquí `calls` sólo sirve como
+  // fallback (vacío) para enlazar contactos con su llamada en la vista de contactos.
+  const [calls]                                 = useState([]);
   const [campaigns, setCampaigns]               = useState([]);
   const [campaignContacts, setCampaignContacts] = useState([]);
   const [followUps, setFollowUps]               = useState([]);
@@ -259,22 +261,8 @@ function AppShell() {
   }, []);
 
   // --- Data loaders ---
-
-  const loadCalls = useCallback(async ({ silent = false } = {}) => {
-    if (!authToken) return;
-    if (!silent) setLoading(true);
-    try {
-      const res = await apiFetch(`/api/v1/calls/admin/all?skip=0&limit=100${areaParam}`, {
-        token: authToken,
-        onUnauthorized: logout,
-      });
-      if (res.ok) setCalls(await res.json());
-    } catch (err) {
-      if (err.message !== 'Unauthorized') console.error('Error loading calls:', err);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [authToken, logout, areaParam]);
+  // El monitor de llamadas (CallsMonitorView) se auto-carga con sus propios
+  // filtros y paginación (server-side), así que aquí ya no se cargan las llamadas.
 
   const loadCampaigns = useCallback(async () => {
     if (!authToken) return;
@@ -427,15 +415,13 @@ function AppShell() {
 
     // Carga perezosa: sólo los datos que la ruta actual necesita, una vez al entrar
     // (o cuando cambia el área). El refresco manual se hace con el botón "Actualizar".
-    if (pathname.startsWith('/calls')) {
-      loadCalls();
-    } else if (pathname.startsWith('/campaigns') && pathname !== '/campaigns/new') {
+    if (pathname.startsWith('/campaigns') && pathname !== '/campaigns/new') {
       loadCampaigns();
     } else if (pathname.startsWith('/followups')) {
       loadFollowUps();
       loadFollowUpStats();
     }
-  }, [isLoggedIn, authToken, pathname, loadCalls, loadCampaigns, loadFollowUps, loadFollowUpStats]);
+  }, [isLoggedIn, authToken, pathname, loadCampaigns, loadFollowUps, loadFollowUpStats]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
@@ -477,18 +463,13 @@ function AppShell() {
 
           <Route path="/dashboard" element={
             <DashboardView
-              calls={calls}
               campaigns={campaigns}
               followUps={followUps}
-              onRefresh={loadCalls}
             />
           } />
 
           <Route path="/calls" element={
             <CallsMonitorView
-              calls={calls}
-              loading={loading}
-              onRefresh={loadCalls}
               onViewTranscription={openTranscription}
               onViewAnalysis={openAnalysis}
             />
