@@ -4,6 +4,7 @@ import { Users, Plus, RefreshCw, X, Check, Pencil, Trash2, AlertTriangle } from 
 import { useAuth } from '../context/AuthContext.jsx';
 import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
+import { TableSkeleton } from './Skeleton.jsx';
 
 const ROLES = [
   { value: 'agente',     label: 'Agente' },
@@ -208,9 +209,8 @@ export default function UsersView() {
       {/* Tabla */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {loading && users.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <RefreshCw className="w-10 h-10 text-gray-400 animate-spin mb-4" />
-            <p className="text-gray-500">Cargando usuarios...</p>
+          <div className="p-6">
+            <TableSkeleton rows={6} cols={5} label="Cargando usuarios" />
           </div>
         ) : users.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">

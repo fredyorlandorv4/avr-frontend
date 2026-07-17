@@ -1,4 +1,5 @@
 import { ArrowLeft, RefreshCw, Users } from 'lucide-react';
+import { TableSkeleton } from './Skeleton.jsx';
 
 export default function CampaignContactsView({ campaign, contacts, calls, loading, onBack, onRefresh, onViewCallAnalysis }) {
   if (!campaign) return null;
@@ -58,10 +59,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
         <div className="p-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <RefreshCw className="w-12 h-12 text-gray-400 animate-spin mb-4" />
-              <p className="text-gray-500">Cargando contactos...</p>
-            </div>
+            <TableSkeleton rows={8} cols={5} label="Cargando contactos" />
           ) : contacts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="p-4 bg-[#053E68]/5 rounded-full mb-4">

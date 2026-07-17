@@ -1,9 +1,14 @@
-import { Target, RefreshCw, Play, Briefcase } from 'lucide-react';
+import { Target, RefreshCw, Play, Briefcase, X } from 'lucide-react';
 import AreaFilter from './AreaFilter.jsx';
+import { CardGridSkeleton } from './Skeleton.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export default function CampaignListView({ campaigns, loading, onRefresh, onCreateNew, onViewContacts, onStartCampaign }) {
+export default function CampaignListView({
+  campaigns, loading, onRefresh, onCreateNew, onViewContacts, onStartCampaign,
+  dateStart = '', dateEnd = '', onDateStartChange, onDateEndChange, onClearDates,
+}) {
   const { areaName } = useAuth();
+  const today = new Date().toISOString().slice(0, 10);
   // Los usuarios del área de marketing no pueden crear campañas.
   const canCreateCampaigns = (areaName || '').toLowerCase() !== 'telemarketing';
 
@@ -51,13 +56,52 @@ export default function CampaignListView({ campaigns, loading, onRefresh, onCrea
         </div>
       </div>
 
-      {campaigns.length === 0 ? (
+      {/* Filtro por rango de fechas (fecha de creación) */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-500 whitespace-nowrap">Desde</label>
+          <input
+            type="date"
+            value={dateStart}
+            max={dateEnd || today}
+            onChange={(e) => onDateStartChange?.(e.target.value)}
+            className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-500 whitespace-nowrap">Hasta</label>
+          <input
+            type="date"
+            value={dateEnd}
+            min={dateStart || undefined}
+            max={today}
+            onChange={(e) => onDateEndChange?.(e.target.value)}
+            className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
+          />
+        </div>
+        <button
+          onClick={() => onClearDates?.()}
+          title="Restablecer al último mes"
+          className="flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+        >
+          <X className="w-4 h-4" />
+          Limpiar
+        </button>
+      </div>
+
+      {/* Sin esta rama, mientras carga se mostraba el estado vacío ("no hay
+          campañas"), que hace pensar que no hay datos cuando aún no llegaron. */}
+      {loading && campaigns.length === 0 ? (
+        <CardGridSkeleton cards={6} label="Cargando campañas" />
+      ) : campaigns.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
           <div className="p-4 bg-[#053E68]/5 rounded-full mb-4">
             <Target className="w-10 h-10 text-[#053E68]" />
           </div>
-          <p className="text-gray-600 font-medium mb-1">No hay campañas disponibles</p>
-          <p className="text-sm text-gray-400">Crea tu primera campaña para comenzar</p>
+          <p className="text-gray-600 font-medium mb-1">No hay campañas en ese rango de fechas</p>
+          <button onClick={() => onClearDates?.()} className="mt-1 text-sm text-[#053E68] font-medium hover:underline">
+            Restablecer al último mes
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

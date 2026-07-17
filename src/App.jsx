@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Phone, Bell, Menu, X, BarChart3, Users, Settings } from 'lucide-react';
+import { Phone, Bell, Menu, X, BarChart3, Users } from 'lucide-react';
 
 import { useAuth } from './context/AuthContext.jsx';
 import { useArea } from './context/AreaContext.jsx';
@@ -19,7 +19,9 @@ import CampaignContactsView from './components/CampaignContactsView.jsx';
 import FollowUpsView from './components/FollowUpsView.jsx';
 import ProjectsView from './components/ProjectsView.jsx';
 import PromptsView from './components/PromptsView.jsx';
+import AgentEditor from './components/AgentEditor.jsx';
 import UsersView from './components/UsersView.jsx';
+import SettingsView from './components/SettingsView.jsx';
 
 const PATH_LABELS = {
   '/dashboard':     'Dashboard',
@@ -30,8 +32,21 @@ const PATH_LABELS = {
   '/followups':     'Follow Ups',
   '/projects':      'Proyectos',
   '/prompts':       'Prompts',
+  '/prompts/new':   'Nuevo Agente',
   '/users':         'Usuarios',
   '/settings':      'Configuración',
+};
+
+// ─── Helpers de fecha (rango por defecto de los filtros) ─────────────────────
+
+const isoDay = (d) => d.toISOString().slice(0, 10);
+const todayIso = () => isoDay(new Date());
+
+// Una semana atrás (7 días).
+const weekAgoIso = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return isoDay(d);
 };
 
 // ─── Auth guards ─────────────────────────────────────────────────────────────
@@ -55,6 +70,7 @@ function Layout() {
 
   const pageTitle = (() => {
     if (pathname.startsWith('/campaigns/') && pathname.endsWith('/contacts')) return 'Contactos de Campaña';
+    if (pathname.startsWith('/prompts/') && pathname.endsWith('/edit')) return 'Editar Agente';
     return PATH_LABELS[pathname] ?? 'RV4 - Call System';
   })();
 
@@ -178,6 +194,20 @@ function CreateCampaignPage({ loadCampaigns }) {
   );
 }
 
+function AgentEditorPage() {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  return (
+    <div className="max-w-[1280px] mx-auto">
+      <AgentEditor
+        agentId={id ? parseInt(id) : null}
+        onSaved={() => navigate('/prompts')}
+        onCancel={() => navigate('/prompts')}
+      />
+    </div>
+  );
+}
+
 function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loadCampaignContacts, onViewCallAnalysis }) {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -206,7 +236,7 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
 
 function AppShell() {
   const { authToken, isLoggedIn, logout, isAdmin, isSystem, areaName } = useAuth();
-  const { effectiveAreaId, areas } = useArea();
+  const { areas, scope } = useArea();
 
   // Restricciones del área de marketing (telemarketing): no crea campañas
   // por Excel ni accede a proyectos. Sí accede a follow-ups.
@@ -215,8 +245,11 @@ function AppShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
-  // Área a aplicar en las consultas. null = todas (no se envía el filtro).
-  const areaParam = (effectiveAreaId != null) ? `&area_id=${effectiveAreaId}` : '';
+  // Alcance a aplicar en las consultas: area_id es el área; subarea es el id de
+  // la subárea, o 'none' para ver sólo lo que no está en ninguna subárea.
+  const areaParam =
+    (scope.areaId != null ? `&area_id=${scope.areaId}` : '') +
+    (scope.subarea ? `&subarea=${scope.subarea}` : '');
 
   const [loading, setLoading]   = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -230,6 +263,25 @@ function AppShell() {
   // fallback (vacío) para enlazar contactos con su llamada en la vista de contactos.
   const [calls]                                 = useState([]);
   const [campaigns, setCampaigns]               = useState([]);
+  // Filtro de fechas de campañas (sobre la fecha de creación): último mes.
+  const [campaignDateStart, setCampaignDateStart] = useState(weekAgoIso);
+  const [campaignDateEnd,   setCampaignDateEnd]   = useState(todayIso);
+
+  // El rango se mantiene válido en el estado, no confiando en el min/max del
+  // input (el navegador sólo los usa como pista: se pueden teclear igual).
+  // Si una fecha cruza a la otra, se arrastra la otra con ella.
+  const changeCampaignStart = useCallback((value) => {
+    setCampaignDateStart(value);
+    if (value) setCampaignDateEnd((end) => (end && value > end ? value : end));
+  }, []);
+  const changeCampaignEnd = useCallback((value) => {
+    setCampaignDateEnd(value);
+    if (value) setCampaignDateStart((start) => (start && value < start ? value : start));
+  }, []);
+  const resetCampaignDates = useCallback(() => {
+    setCampaignDateStart(weekAgoIso());
+    setCampaignDateEnd(todayIso());
+  }, []);
   const [campaignContacts, setCampaignContacts] = useState([]);
   const [followUps, setFollowUps]               = useState([]);
   const [followUpStats, setFollowUpStats]       = useState({ total: 0, green: 0, orange: 0, red: 0, completed: 0 });
@@ -267,7 +319,10 @@ function AppShell() {
   const loadCampaigns = useCallback(async () => {
     if (!authToken) return;
     try {
-      const res = await apiFetch(`/api/v1/campaigns?skip=0&limit=100${areaParam}`, {
+      const dateParams =
+        (campaignDateStart ? `&fecha_inicio=${campaignDateStart}` : '') +
+        (campaignDateEnd   ? `&fecha_fin=${campaignDateEnd}`     : '');
+      const res = await apiFetch(`/api/v1/campaigns?skip=0&limit=100${areaParam}${dateParams}`, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -286,11 +341,21 @@ function AppShell() {
           pending:     Math.max(0, (c.total_contacts || 0) - (c.called_contacts || 0)),
           created:     c.created_at ? new Date(c.created_at).toLocaleDateString('es-GT') : '-',
         })));
+      } else {
+        const detail = await res.json().catch(() => null);
+        const msg = detail?.detail;
+        showToast(
+          typeof msg === 'string' ? msg : `Error al cargar campañas (${res.status})`,
+          'error',
+        );
       }
     } catch (err) {
-      if (err.message !== 'Unauthorized') console.error('Error loading campaigns:', err);
+      if (err.message !== 'Unauthorized') {
+        console.error('Error loading campaigns:', err);
+        showToast('No se pudieron cargar las campañas', 'error');
+      }
     }
-  }, [authToken, logout, areaParam]);
+  }, [authToken, logout, areaParam, campaignDateStart, campaignDateEnd, showToast]);
 
   const loadCampaignContacts = useCallback(async (campaignId, areaName = '') => {
     if (!authToken || !campaignId) return;
@@ -484,6 +549,11 @@ function AppShell() {
               campaigns={campaigns}
               loading={loading}
               onRefresh={loadCampaigns}
+              dateStart={campaignDateStart}
+              dateEnd={campaignDateEnd}
+              onDateStartChange={changeCampaignStart}
+              onDateEndChange={changeCampaignEnd}
+              onClearDates={resetCampaignDates}
               onCreateNew={() => navigate('/campaigns/new')}
               onViewContacts={(campaign) => navigate(`/campaigns/${campaign.id}/contacts`, { state: { campaign } })}
               onStartCampaign={startCampaign}
@@ -533,12 +603,20 @@ function AppShell() {
             isAdmin ? <PromptsView /> : <Navigate to="/dashboard" replace />
           } />
 
+          <Route path="/prompts/new" element={
+            isAdmin ? <AgentEditorPage /> : <Navigate to="/dashboard" replace />
+          } />
+
+          <Route path="/prompts/:id/edit" element={
+            isAdmin ? <AgentEditorPage /> : <Navigate to="/dashboard" replace />
+          } />
+
           <Route path="/users" element={
             isAdmin ? <UsersView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="/settings" element={
-            isAdmin ? <ComingSoon Icon={Settings} title="Configuración" /> : <Navigate to="/dashboard" replace />
+            isAdmin ? <SettingsView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

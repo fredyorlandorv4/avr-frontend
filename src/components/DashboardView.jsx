@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 import AreaFilter from './AreaFilter.jsx';
+import { DashboardSkeleton } from './Skeleton.jsx';
 
 // ─── Colores ──────────────────────────────────────────────────
 const C = {
@@ -40,7 +41,9 @@ function buildQuery(params) {
   if (params.dateFrom) q.set('date_from', params.dateFrom);
   if (params.dateTo)   q.set('date_to',   params.dateTo);
   if (params.userId)   q.set('user_id',   params.userId);
+  // Alcance: area_id es el área; subarea es el id de la subárea o 'none'.
   if (params.areaId != null && params.areaId !== '') q.set('area_id', params.areaId);
+  if (params.subarea) q.set('subarea', params.subarea);
   const str = q.toString();
   return str ? `?${str}` : '';
 }
@@ -136,7 +139,8 @@ const inputCls = 'px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-
 
 export default function DashboardView() {
   const { authToken, logout } = useAuth();
-  const { effectiveAreaId } = useArea();
+  // El alcance (área / subárea / sin categorizar) lo maneja AreaFilter vía AreaContext.
+  const { scope } = useArea();
 
   // Por defecto: últimos 30 días (coincide con el default del backend y se ve reflejado en los inputs).
   const [filters, setFilters] = useState(() => {
@@ -162,10 +166,10 @@ export default function DashboardView() {
     setLoading(true);
     setError(null);
 
-    // Área efectiva (admin: su selección; resto: su propia área).
-    const areaScope = effectiveAreaId ?? undefined;
-    const qFull    = buildQuery({ ...f, areaId: areaScope });                                  // date + user + area
-    const qDateOnly= buildQuery({ dateFrom: f.dateFrom, dateTo: f.dateTo, areaId: areaScope }); // date + area
+    // Alcance: área, subárea o sin categorizar (AreaContext lo resuelve).
+    const sc = { areaId: scope.areaId ?? undefined, subarea: scope.subarea };
+    const qFull    = buildQuery({ ...f, ...sc });                                  // date + user + alcance
+    const qDateOnly= buildQuery({ dateFrom: f.dateFrom, dateTo: f.dateTo, ...sc }); // date + alcance
 
     try {
       const opts = { token: authToken, onUnauthorized: logout };
@@ -176,7 +180,7 @@ export default function DashboardView() {
         apiFetch(`/api/v1/dashboard/calls/duration-distribution${qFull}`, opts),
         apiFetch(`/api/v1/dashboard/agents/stats${qDateOnly}`,            opts),
         apiFetch(`/api/v1/dashboard/campaigns/stats${qDateOnly}`,         opts),
-        apiFetch(`/api/v1/dashboard/follow-ups/summary`,                  opts),
+        apiFetch(`/api/v1/dashboard/follow-ups/summary${qDateOnly}`,      opts),
       ]);
 
       const [d1, d2, d3, d4, d5, d6, d7] = await Promise.all([
@@ -201,7 +205,7 @@ export default function DashboardView() {
     } finally {
       setLoading(false);
     }
-  }, [authToken, logout, effectiveAreaId]);
+  }, [authToken, logout, scope]);
 
   useEffect(() => { fetchAll(filters); }, [fetchAll]);
 
@@ -281,12 +285,9 @@ export default function DashboardView() {
     || filters.dateTo !== defaultRange.dateTo;
 
   // ─── Estados de carga/error ─────────────────────────────
-  if (loading && !k) return (
-    <div className="flex flex-col items-center justify-center py-24 text-gray-400">
-      <RefreshCw className="w-8 h-8 animate-spin" />
-      <p className="mt-3 text-sm">Cargando tablero…</p>
-    </div>
-  );
+  // Solo en la carga inicial: al refiltrar ya hay datos en pantalla y el
+  // spinner del botón "Actualizar" basta.
+  if (loading && !k) return <DashboardSkeleton />;
 
   if (error) return (
     <div className="p-6 text-red-700 bg-red-50 border border-red-200 rounded-2xl max-w-[1280px] mx-auto">

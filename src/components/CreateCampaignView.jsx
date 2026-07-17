@@ -5,7 +5,7 @@ import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 
 export default function CreateCampaignView({ onCancel, onSuccess }) {
-  const { authToken, logout, isSystem, areaId } = useAuth();
+  const { authToken, logout, isSystem, areaId, areaName } = useAuth();
   const { areas } = useArea();   // lista de áreas (cargada solo para usuarios "system")
   const [campaignName, setCampaignName] = useState('');
   const [campaignTitle, setCampaignTitle] = useState('');
@@ -18,6 +18,12 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+
+  // Subáreas: se usa el listado completo porque es el único que trae el id
+  // ({ id, uuid, name, area }); /subareas/area/{id} solo devuelve { uuid, name }.
+  const [allSubareas, setAllSubareas] = useState([]);
+  const [subareasLoading, setSubareasLoading] = useState(false);
+  const [selectedSubareaId, setSelectedSubareaId] = useState('');
 
   // Cargar proyectos al montar el componente
   useEffect(() => {
@@ -45,6 +51,40 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
   useEffect(() => {
     if (!isSystem && areaId != null) setSelectedAreaId(String(areaId));
   }, [isSystem, areaId]);
+
+  // Subáreas disponibles (para el área elegida o, si no es system, para la propia).
+  useEffect(() => {
+    const loadSubareas = async () => {
+      setSubareasLoading(true);
+      try {
+        const res = await apiFetch('/api/v1/subareas', { token: authToken, onUnauthorized: logout });
+        if (res.ok) {
+          const data = await res.json();
+          setAllSubareas(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        if (err.message !== 'Unauthorized') console.error('Error loading subareas:', err);
+      } finally {
+        setSubareasLoading(false);
+      }
+    };
+    loadSubareas();
+  }, [authToken, logout]);
+
+  // Área vigente: la que elige el system-admin, o la propia para el resto.
+  const selectedArea = areas.find((a) => String(a.id) === String(selectedAreaId)) || null;
+  const currentAreaName = isSystem ? (selectedArea?.area || '') : (areaName || '');
+
+  const availableSubareas = allSubareas.filter(
+    (s) => (s.area || '').trim().toLowerCase() === currentAreaName.trim().toLowerCase()
+  );
+
+  // El system-admin se guía por el flag "subareas" del área elegida. El resto no tiene
+  // la lista de áreas cargada, así que se valida por la existencia de subáreas propias.
+  const hasSubareas = isSystem ? !!selectedArea?.subareas : availableSubareas.length > 0;
+
+  // Al cambiar de área, la subárea elegida deja de ser válida.
+  useEffect(() => { setSelectedSubareaId(''); }, [selectedAreaId]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -98,6 +138,16 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
       }
       formData.append('area_id', selectedAreaId);
 
+      // Si el área maneja subáreas, hay que precisar cuál.
+      if (hasSubareas) {
+        if (!selectedSubareaId) {
+          setUploadError('Por favor selecciona una subárea.');
+          setUploadLoading(false);
+          return;
+        }
+        formData.append('subarea_id', selectedSubareaId);
+      }
+
       const response = await apiFetch('/api/v1/campaigns/upload', {
         method: 'POST',
         token: authToken,
@@ -127,6 +177,24 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
 
   return (
     <div className="max-w-[1280px] mx-auto space-y-6">
+      {/* Bloquea la vista mientras se sube: el parseo del Excel y la carga de
+          contactos puede tardar, y el spinner del botón queda fuera de vista. */}
+      {uploadLoading && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#053E68]/30 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="mx-4 flex flex-col items-center gap-3 rounded-2xl bg-white px-8 py-7 shadow-xl">
+            <RefreshCw className="w-10 h-10 text-[#053E68] animate-spin" />
+            <p className="text-base font-semibold text-[#053E68]">Creando campaña…</p>
+            <p className="max-w-xs text-center text-sm text-gray-500">
+              Cargando los contactos del archivo. Puede tardar unos segundos.
+            </p>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={onCancel}
         disabled={uploadLoading}
@@ -234,6 +302,32 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
             </div>
           )}
 
+          {/* Subárea: sólo si el área vigente maneja subáreas. */}
+          {hasSubareas && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Subárea *</label>
+              <div className="relative">
+                <select
+                  value={selectedSubareaId}
+                  onChange={(e) => setSelectedSubareaId(e.target.value)}
+                  disabled={uploadLoading || subareasLoading}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] transition text-base appearance-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {subareasLoading ? 'Cargando subáreas...' : '-- Selecciona una subárea --'}
+                  </option>
+                  {availableSubareas.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              </div>
+              {!subareasLoading && availableSubareas.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1.5">Esta área no tiene subáreas disponibles.</p>
+              )}
+            </div>
+          )}
+
           {/* Descripción */}
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
@@ -296,12 +390,14 @@ export default function CreateCampaignView({ onCancel, onSuccess }) {
         <div className="flex flex-col sm:flex-row gap-3 mt-8">
           <button
             onClick={handleUpload}
-            disabled={uploadLoading || !campaignName || !selectedProjectId || !selectedFile}
+            // uploadSuccess también bloquea: tras crearla se navega recién a los 2s,
+            // y sin esto el botón se re-habilita y permite crearla dos veces.
+            disabled={uploadLoading || !!uploadSuccess || !campaignName || !selectedProjectId || !selectedFile || (hasSubareas && !selectedSubareaId)}
             className="flex-1 px-6 py-3 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition font-medium text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {uploadLoading ? (
               <><RefreshCw className="w-5 h-5 animate-spin" /> Cargando campaña...</>
-            ) : 'Crear Campaña'}
+            ) : uploadSuccess ? 'Campaña creada' : 'Crear Campaña'}
           </button>
           <button
             onClick={onCancel}

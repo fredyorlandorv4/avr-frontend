@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 import AreaFilter from './AreaFilter.jsx';
+import { CallListSkeleton } from './Skeleton.jsx';
 
 const getRecordingUrl = (callId) => `/api/v1/calls/${callId}/recording/download`;
 
@@ -46,7 +47,8 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }) {
   const { authToken, logout } = useAuth();
-  const { effectiveAreaId } = useArea();
+  // El alcance (área / subárea / sin categorizar) lo maneja AreaFilter vía AreaContext.
+  const { effectiveAreaId, scope } = useArea();
 
   // ── Filtros (todos se aplican en el backend) ──────────────
   // Por defecto cargamos solo las llamadas de hoy para no traer de más.
@@ -104,14 +106,16 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
     const qs = new URLSearchParams();
     qs.set('page',  String(pageNum));
     qs.set('limit', String(PAGE_SIZE));
-    if (effectiveAreaId != null) qs.set('area_id', String(effectiveAreaId));
+    // Alcance: area_id es el área; subarea es el id de la subárea o 'none'.
+    if (scope.areaId != null)    qs.set('area_id', String(scope.areaId));
+    if (scope.subarea)           qs.set('subarea', scope.subarea);
     if (filterStatus !== 'all')  qs.set('estado', filterStatus);
     if (filterCampaign)          qs.set('campana', filterCampaign);
     if (searchQuery)             qs.set('cliente', searchQuery);
     if (dateStart)               qs.set('fecha_inicio', dateStart);
     if (dateEnd)                 qs.set('fecha_fin', dateEnd);
     return qs.toString();
-  }, [effectiveAreaId, filterStatus, filterCampaign, searchQuery, dateStart, dateEnd]);
+  }, [scope, filterStatus, filterCampaign, searchQuery, dateStart, dateEnd]);
 
   // ── Carga (append = scroll infinito) ──────────────────────
   const load = useCallback(async (pageNum, { append }) => {
@@ -164,12 +168,24 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
 
   // ── UI helpers ────────────────────────────────────────────
   const today = todayStr();
+
+  // El rango se mantiene válido en el estado: el min/max del input es sólo una
+  // pista para el calendario, no impide teclear una fecha fuera de rango.
+  const changeDateStart = useCallback((value) => {
+    setDateStart(value);
+    if (value) setDateEnd((end) => (end && value > end ? value : end));
+  }, []);
+  const changeDateEnd = useCallback((value) => {
+    setDateEnd(value);
+    if (value) setDateStart((start) => (start && value < start ? value : start));
+  }, []);
   const hasActiveFilters =
     filterStatus !== 'all' || filterSearch || filterCampaign ||
     dateStart !== today || dateEnd !== today;
   const clearFilters = () => {
     setFilterStatus('all'); setFilterSearch('');
-    setFilterCampaign('');  setDateStart(today); setDateEnd(today);
+    setFilterCampaign('');
+    setDateStart(today);    setDateEnd(today);
   };
 
   const refresh = useCallback(() => { load(1, { append: false }); }, [load]);
@@ -299,7 +315,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
               type="date"
               value={dateStart}
               max={dateEnd || today}
-              onChange={(e) => setDateStart(e.target.value)}
+              onChange={(e) => changeDateStart(e.target.value)}
               className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
             />
           </div>
@@ -310,7 +326,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
               value={dateEnd}
               min={dateStart || undefined}
               max={today}
-              onChange={(e) => setDateEnd(e.target.value)}
+              onChange={(e) => changeDateEnd(e.target.value)}
               className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
             />
           </div>
@@ -318,10 +334,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
 
         {/* Lista */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <RefreshCw className="w-12 h-12 text-gray-400 animate-spin mb-4" />
-            <p className="text-gray-500">Cargando llamadas...</p>
-          </div>
+          <CallListSkeleton />
         ) : loadError ? (
           <div className="flex flex-col items-center justify-center py-12">
             <X className="w-12 h-12 text-red-400 mb-4" />
