@@ -8,6 +8,13 @@ import { CallListSkeleton } from './Skeleton.jsx';
 
 const getRecordingUrl = (callId) => `/api/v1/calls/${callId}/recording/download`;
 
+// Segundos -> m:ss (148 -> "2:28")
+const fmtDuration = (sec) => {
+  if (sec == null || sec === 0) return 'N/A';
+  const total = Math.round(Number(sec));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
+
 const PAGE_SIZE = 20;
 
 // Solo mostramos el botón en llamadas que podrían tener grabación
@@ -406,7 +413,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
                     <div>
                       <p className="text-xs text-gray-500">Duración</p>
                       <p className="text-sm font-medium text-gray-800">
-                        {call.duration ? `${call.duration}s` : 'N/A'}
+                        {fmtDuration(call.duration)}
                       </p>
                     </div>
                     <div>
