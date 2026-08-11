@@ -34,9 +34,31 @@ const STATUS_MAP = {
   initiated:   'Iniciada',
 };
 
-function getStatusLabel(status) { return STATUS_MAP[status] || status; }
+const VOICEMAIL_STATUS = 'voicemail';
+
+function isTruthyFlag(value) {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === '1' || normalized === 'true' || normalized === 'yes';
+  }
+  return false;
+}
+
+function getEffectiveStatus(call) {
+  const status = String(call?.status || '').toLowerCase();
+  if (status === 'busy' || status === 'no-answer' || status === 'no_answer') return VOICEMAIL_STATUS;
+  if (isTruthyFlag(call?.busy) || isTruthyFlag(call?.no_answer)) return VOICEMAIL_STATUS;
+  return status;
+}
+
+function getStatusLabel(status) {
+  if (status === VOICEMAIL_STATUS) return 'Buzon';
+  return STATUS_MAP[status] || status;
+}
 
 function getStatusColor(status) {
+  if (status === VOICEMAIL_STATUS)                   return 'bg-orange-100 text-orange-800';
   if (status === 'ringing' || status === 'active')     return 'bg-green-100 text-green-800';
   if (status === 'answered' || status === 'completed') return 'bg-blue-100 text-blue-800';
   if (status === 'pending' || status === 'initiated')  return 'bg-yellow-100 text-yellow-800';
@@ -44,6 +66,7 @@ function getStatusColor(status) {
 }
 
 function getStatusIconColor(status) {
+  if (status === VOICEMAIL_STATUS)                   return 'bg-orange-100 text-orange-600';
   if (status === 'ringing' || status === 'active')     return 'bg-green-100 text-green-600';
   if (status === 'answered' || status === 'completed') return 'bg-blue-100 text-blue-600';
   if (status === 'pending' || status === 'initiated')  return 'bg-yellow-100 text-yellow-600';
@@ -365,6 +388,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
         ) : (
           <div className="space-y-4">
             {calls.map((call) => {
+              const effectiveStatus = getEffectiveStatus(call);
               const contactName  = call.client_name   || null;
               const phone        = call.destination   || '—';
               const campaignName = call.campaign_name || null;
@@ -379,7 +403,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
                   {/* Fila superior: info + estado */}
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-full flex-shrink-0 mt-0.5 ${getStatusIconColor(call.status)}`}>
+                      <div className={`p-2 rounded-full flex-shrink-0 mt-0.5 ${getStatusIconColor(effectiveStatus)}`}>
                         <Phone className="w-5 h-5" />
                       </div>
                       <div>
@@ -402,8 +426,8 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
                           {call.area_name}
                         </span>
                       )}
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(call.status)}`}>
-                        {getStatusLabel(call.status)}
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(effectiveStatus)}`}>
+                        {getStatusLabel(effectiveStatus)}
                       </span>
                     </div>
                   </div>
