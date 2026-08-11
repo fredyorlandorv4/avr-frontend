@@ -35,6 +35,24 @@ const STATUS_MAP = {
 };
 
 const VOICEMAIL_STATUS = 'voicemail';
+const VOICEMAIL_KEYWORDS = [
+  'voicemail',
+  'voice mail',
+  'mailbox',
+  'buzon',
+  'no_answer',
+  'no-answer',
+  'busy',
+  'answering machine',
+  'skipping tool call in test mode',
+];
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 function isTruthyFlag(value) {
   if (value === true || value === 1) return true;
@@ -45,15 +63,74 @@ function isTruthyFlag(value) {
   return false;
 }
 
+function containsVoicemailKeywords(text) {
+  const normalized = normalizeText(text);
+  return VOICEMAIL_KEYWORDS.some((kw) => normalized.includes(kw));
+}
+
+function hasVoicemailSignal(call) {
+  if (!call || typeof call !== 'object') return false;
+
+  if (
+    isTruthyFlag(call?.busy) ||
+    isTruthyFlag(call?.no_answer) ||
+    isTruthyFlag(call?.noAnswer) ||
+    isTruthyFlag(call?.voicemail) ||
+    isTruthyFlag(call?.is_voicemail) ||
+    isTruthyFlag(call?.voicemail_detected)
+  ) {
+    return true;
+  }
+
+  const stack = [call];
+  const seen = new Set();
+  let visited = 0;
+
+  while (stack.length && visited < 200) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    visited += 1;
+
+    for (const [key, value] of Object.entries(current)) {
+      const keyNorm = normalizeText(key);
+
+      if ((keyNorm.includes('voicemail') || keyNorm.includes('no_answer') || keyNorm.includes('no-answer') || keyNorm.includes('busy')) && isTruthyFlag(value)) {
+        return true;
+      }
+
+      if (typeof value === 'string' && containsVoicemailKeywords(value)) {
+        return true;
+      }
+
+      if (value && typeof value === 'object') {
+        stack.push(value);
+      }
+    }
+  }
+
+  return false;
+}
+
 function getEffectiveStatus(call) {
   const status = String(call?.status || '').toLowerCase();
+
+  // Nuevo contrato backend: estos flags tienen prioridad sobre el status general.
+  const voicemailDetected =
+    isTruthyFlag(call?.voicemail_detected) ||
+    isTruthyFlag(call?.voicemailDetected);
+  const answeredByHuman = call?.answered_by_human ?? call?.answeredByHuman;
+
+  if (voicemailDetected) return VOICEMAIL_STATUS;
+  if (answeredByHuman === false && (status === 'completed' || status === 'answered')) return VOICEMAIL_STATUS;
+
   if (status === 'busy' || status === 'no-answer' || status === 'no_answer') return VOICEMAIL_STATUS;
-  if (isTruthyFlag(call?.busy) || isTruthyFlag(call?.no_answer)) return VOICEMAIL_STATUS;
+  if (hasVoicemailSignal(call)) return VOICEMAIL_STATUS;
   return status;
 }
 
 function getStatusLabel(status) {
-  if (status === VOICEMAIL_STATUS) return 'Buzon';
+  if (status === VOICEMAIL_STATUS) return 'Buzón';
   return STATUS_MAP[status] || status;
 }
 
