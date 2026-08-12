@@ -20,7 +20,7 @@ const C = {
   accent:      '#F4CD04',  // amarillo marca
 };
 
-const DASHBOARD_CALLS_PAGE_SIZE = 200;
+const DASHBOARD_CALLS_PAGE_SIZE = 50;
 const DASHBOARD_MAX_CALLS = 2000;
 const DASHBOARD_AUTO_REFRESH_MS = 30000;
 const POSITIVE_KEYWORDS = ['positivo', 'positive'];
@@ -56,6 +56,7 @@ function buildQuery(params) {
 
 function normalizeText(value) {
   return String(value || '')
+    .trim()
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
@@ -92,14 +93,23 @@ function callLooksVoicemail(call) {
   return textCandidates.some((txt) => typeof txt === 'string' && hasKeyword(txt, VOICEMAIL_KEYWORDS));
 }
 
+function getTerminalStatus(call) {
+  const status = normalizeText(call?.status);
+  if (!status) return 'unknown';
+
+  if (['ringing', 'active', 'pending', 'initiated'].includes(status)) return 'in_progress';
+  if (['completed', 'completada', 'answered', 'contestada'].includes(status)) return 'answered_like';
+  if (['busy', 'no-answer', 'no_answer', 'failed', 'fallida', 'cancelled', 'cancelada'].includes(status)) return 'unanswered_like';
+  return 'other';
+}
+
 function isAnsweredCall(call) {
   if (call?.answered_by_human === true || call?.answeredByHuman === true) return true;
   if (call?.answered_by_human === false || call?.answeredByHuman === false) return false;
   if (callLooksVoicemail(call)) return false;
 
-  const status = normalizeText(call?.status);
-  if (status === 'answered') return true;
-  if (status === 'completed') return true;
+  const terminal = getTerminalStatus(call);
+  if (terminal === 'answered_like') return true;
   return false;
 }
 
@@ -252,7 +262,11 @@ export default function DashboardView() {
         token: authToken,
         onUnauthorized: logout,
       });
-      if (!res.ok) break;
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        console.error('Dashboard metrics calls fetch failed', { page, status: res.status, detail });
+        break;
+      }
 
       const payload = await res.json();
       const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -372,13 +386,10 @@ export default function DashboardView() {
 
   const callMetrics = useMemo(() => {
     const totalCalls = callsForMetrics.length;
-    const completedOrAnswered = callsForMetrics.filter((call) => {
-      const st = normalizeText(call?.status);
-      return st === 'completed' || st === 'answered';
-    });
+    const terminalCalls = callsForMetrics.filter((call) => getTerminalStatus(call) !== 'in_progress');
 
-    const answered = completedOrAnswered.reduce((acc, call) => (isAnsweredCall(call) ? acc + 1 : acc), 0);
-    const unanswered = Math.max(0, completedOrAnswered.length - answered);
+    const answered = terminalCalls.reduce((acc, call) => (isAnsweredCall(call) ? acc + 1 : acc), 0);
+    const unanswered = Math.max(0, terminalCalls.length - answered);
     const positive = callsForMetrics.reduce((acc, call) => (isPositiveCall(call) ? acc + 1 : acc), 0);
     const positivePct = totalCalls > 0 ? Math.round((positive / totalCalls) * 100) : 0;
 
