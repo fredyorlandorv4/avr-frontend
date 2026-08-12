@@ -20,6 +20,12 @@ const C = {
   accent:      '#F4CD04',  // amarillo marca
 };
 
+const DASHBOARD_CALLS_PAGE_SIZE = 200;
+const DASHBOARD_MAX_CALLS = 2000;
+const DASHBOARD_AUTO_REFRESH_MS = 30000;
+const POSITIVE_KEYWORDS = ['positivo', 'positive'];
+const VOICEMAIL_KEYWORDS = ['voicemail', 'voice mail', 'mailbox', 'buzon', 'buzon de voz', 'answering machine'];
+
 // ─── Helpers ──────────────────────────────────────────────────
 function fmtDuration(sec) {
   if (sec == null || sec === 0) return '—';
@@ -46,6 +52,69 @@ function buildQuery(params) {
   if (params.subarea) q.set('subarea', params.subarea);
   const str = q.toString();
   return str ? `?${str}` : '';
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function isTruthy(value) {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const n = value.trim().toLowerCase();
+    return n === '1' || n === 'true' || n === 'yes';
+  }
+  return false;
+}
+
+function hasKeyword(text, keywords) {
+  const normalized = normalizeText(text);
+  return keywords.some((kw) => normalized.includes(kw));
+}
+
+function callLooksVoicemail(call) {
+  if (isTruthy(call?.voicemail_detected) || isTruthy(call?.voicemailDetected)) return true;
+  const status = normalizeText(call?.status);
+  if (status === 'busy' || status === 'no-answer' || status === 'no_answer') return true;
+
+  const analysis = call?.analysis || {};
+  const textCandidates = [
+    call?.transcription,
+    analysis?.title,
+    analysis?.summary,
+    analysis?.sentiment,
+    analysis?.tag,
+  ];
+
+  return textCandidates.some((txt) => typeof txt === 'string' && hasKeyword(txt, VOICEMAIL_KEYWORDS));
+}
+
+function isAnsweredCall(call) {
+  if (call?.answered_by_human === true || call?.answeredByHuman === true) return true;
+  if (call?.answered_by_human === false || call?.answeredByHuman === false) return false;
+  if (callLooksVoicemail(call)) return false;
+
+  const status = normalizeText(call?.status);
+  if (status === 'answered') return true;
+  if (status === 'completed') return true;
+  return false;
+}
+
+function isPositiveCall(call) {
+  const analysis = call?.analysis || {};
+  const sentiment =
+    analysis?.sentiment ??
+    analysis?.tag ??
+    analysis?.label ??
+    analysis?.result ??
+    analysis?.outcome ??
+    '';
+
+  if (typeof sentiment !== 'string') return false;
+  return hasKeyword(sentiment, POSITIVE_KEYWORDS);
 }
 
 // ─── Section card ─────────────────────────────────────────────
@@ -158,8 +227,44 @@ export default function DashboardView() {
   const [agentStats,   setAgentStats]   = useState([]);
   const [campaignStats,setCampaignStats]= useState([]);
   const [fuSummary,    setFuSummary]    = useState(null);
+  const [callsForMetrics, setCallsForMetrics] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
+
+  const fetchCallsForMetrics = useCallback(async (f, sc) => {
+    if (!authToken) return [];
+
+    const all = [];
+    let page = 1;
+    let total = Number.POSITIVE_INFINITY;
+
+    while (all.length < total && all.length < DASHBOARD_MAX_CALLS) {
+      const qs = new URLSearchParams();
+      qs.set('page', String(page));
+      qs.set('limit', String(DASHBOARD_CALLS_PAGE_SIZE));
+      if (f.dateFrom) qs.set('fecha_inicio', f.dateFrom);
+      if (f.dateTo) qs.set('fecha_fin', f.dateTo);
+      if (f.userId) qs.set('user_id', f.userId);
+      if (sc.areaId != null && sc.areaId !== '') qs.set('area_id', String(sc.areaId));
+      if (sc.subarea) qs.set('subarea', sc.subarea);
+
+      const res = await apiFetch(`/api/v1/calls/admin/all?${qs.toString()}`, {
+        token: authToken,
+        onUnauthorized: logout,
+      });
+      if (!res.ok) break;
+
+      const payload = await res.json();
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      total = Number(payload?.total ?? items.length);
+      all.push(...items);
+
+      if (items.length === 0) break;
+      page += 1;
+    }
+
+    return all.slice(0, DASHBOARD_MAX_CALLS);
+  }, [authToken, logout]);
 
   const fetchAll = useCallback(async (f) => {
     if (!authToken) return;
@@ -173,7 +278,7 @@ export default function DashboardView() {
 
     try {
       const opts = { token: authToken, onUnauthorized: logout };
-      const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, metricCalls] = await Promise.all([
         apiFetch(`/api/v1/dashboard/calls/kpis${qFull}`,                  opts),
         apiFetch(`/api/v1/dashboard/calls/daily${qFull}`,                 opts),
         apiFetch(`/api/v1/dashboard/calls/by-hour${qDateOnly}`,           opts),
@@ -181,6 +286,7 @@ export default function DashboardView() {
         apiFetch(`/api/v1/dashboard/agents/stats${qDateOnly}`,            opts),
         apiFetch(`/api/v1/dashboard/campaigns/stats${qDateOnly}`,         opts),
         apiFetch(`/api/v1/dashboard/follow-ups/summary${qDateOnly}`,      opts),
+        fetchCallsForMetrics(f, sc),
       ]);
 
       const [d1, d2, d3, d4, d5, d6, d7] = await Promise.all([
@@ -200,14 +306,23 @@ export default function DashboardView() {
       setAgentStats(Array.isArray(d5) ? d5 : d5?.data ?? []);
       setCampaignStats(Array.isArray(d6) ? d6 : d6?.data ?? []);
       setFuSummary(d7);
+      setCallsForMetrics(Array.isArray(metricCalls) ? metricCalls : []);
     } catch (err) {
       if (err.message !== 'Unauthorized') setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [authToken, logout, scope]);
+  }, [authToken, logout, scope, fetchCallsForMetrics]);
 
   useEffect(() => { fetchAll(filters); }, [fetchAll]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    const timer = setInterval(() => {
+      fetchAll(filters);
+    }, DASHBOARD_AUTO_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [authToken, fetchAll, filters]);
 
   // Agent list for user_id dropdown — derived from agentStats
   const agentOptions = useMemo(() => agentStats.map(a => ({
@@ -246,16 +361,29 @@ export default function DashboardView() {
   // Normalizar campos de kpis (snake_case o camelCase)
   const k = kpis ? {
     total:          kpis.total_calls   ?? kpis.totalCalls   ?? 0,
-    completed:      kpis.completed     ?? 0,
     ringing:        kpis.ringing       ?? kpis.active       ?? 0,
     effective:      kpis.effective     ?? 0,
     ineffective:    kpis.ineffective   ?? 0,
-    efficiencyPct:  kpis.efficiency_pct?? kpis.efficiencyPct?? 0,
     minDuration:    kpis.min_duration_sec    ?? kpis.min_duration    ?? kpis.minDuration    ?? 0,
     maxDuration:    kpis.max_duration_sec    ?? kpis.max_duration    ?? kpis.maxDuration    ?? 0,
     medianDuration: kpis.median_duration_sec ?? kpis.median_duration ?? kpis.medianDuration ?? 0,
     avgDuration:    kpis.avg_duration_sec    ?? kpis.avg_duration    ?? kpis.avgDuration    ?? 0,
   } : null;
+
+  const callMetrics = useMemo(() => {
+    const totalCalls = callsForMetrics.length;
+    const completedOrAnswered = callsForMetrics.filter((call) => {
+      const st = normalizeText(call?.status);
+      return st === 'completed' || st === 'answered';
+    });
+
+    const answered = completedOrAnswered.reduce((acc, call) => (isAnsweredCall(call) ? acc + 1 : acc), 0);
+    const unanswered = Math.max(0, completedOrAnswered.length - answered);
+    const positive = callsForMetrics.reduce((acc, call) => (isPositiveCall(call) ? acc + 1 : acc), 0);
+    const positivePct = totalCalls > 0 ? Math.round((positive / totalCalls) * 100) : 0;
+
+    return { answered, unanswered, positive, totalCalls, positivePct };
+  }, [callsForMetrics]);
 
   // Normalizar duration buckets (is_effective o isEffective)
   const durationBuckets = durationDist.map(b => ({
@@ -359,20 +487,21 @@ export default function DashboardView() {
       {/* KPIs — solo si hay datos */}
       {k && (
         <Section title="Resumen general">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-2.5">
             <KpiCard label="Total llamadas"     value={k.total}         sub="período seleccionado" />
-            <KpiCard label="Completadas"        value={k.completed}     sub={`${k.ringing} activas`}      accent="blue" />
+            <KpiCard label="Contestadas"        value={callMetrics.answered}   sub="humano atendió"   accent="blue" />
+            <KpiCard label="No contestadas"     value={callMetrics.unanswered} sub="buzón o sin contacto" accent="amber" />
             <KpiCard label="Efectivas ≥30s"    value={k.effective}     sub="de completadas"              accent="green" />
             <KpiCard label="No efectivas <30s" value={k.ineffective}   sub="contacto no logrado"         accent="red" />
             <KpiCard label="Eficiencia"
-              value={`${k.efficiencyPct}%`}
-              sub="efectivas / completadas"
-              accent={k.efficiencyPct >= 70 ? 'green' : k.efficiencyPct >= 40 ? 'amber' : 'red'} />
+              value={`${callMetrics.positivePct}%`}
+              sub="llamadas positivas / total"
+              accent={callMetrics.positivePct >= 70 ? 'green' : callMetrics.positivePct >= 40 ? 'amber' : 'red'} />
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
             <KpiCard label="Duración mínima"   value={fmtDuration(k.minDuration)}    sub="llamada más corta" />
             <KpiCard label="Duración máxima"   value={fmtDuration(k.maxDuration)}    sub="llamada más larga"  accent="amber" />
-            <KpiCard label="Mediana duración"  value={fmtDuration(k.medianDuration)} sub="valor central"      accent="blue" />
+            <KpiCard label="Duración media"  value={fmtDuration(k.medianDuration)} sub="valor central"      accent="blue" />
             <KpiCard label="Promedio duración" value={fmtDuration(k.avgDuration)}    sub="influido por outliers" />
           </div>
         </Section>

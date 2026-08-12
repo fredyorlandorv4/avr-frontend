@@ -16,6 +16,7 @@ const fmtDuration = (sec) => {
 };
 
 const PAGE_SIZE = 20;
+const AUTO_REFRESH_MS = 30000;
 
 // Solo mostramos el botón en llamadas que podrían tener grabación
 const RECORDABLE_STATUSES = ['completed', 'answered'];
@@ -179,8 +180,9 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
   const [loading,     setLoading]     = useState(false);   // carga inicial / cambio de filtros
   const [loadingMore, setLoadingMore] = useState(false);   // scroll infinito
   const [loadError,   setLoadError]   = useState(null);
+  const [loadedRawCount, setLoadedRawCount] = useState(0);
 
-  const hasMore = calls.length < total;
+  const hasMore = loadedRawCount < total;
 
   // Opciones de campaña para el selector (lista completa, no solo lo cargado)
   const [campaignOptions, setCampaignOptions] = useState([]);
@@ -216,7 +218,8 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
     // Alcance: area_id es el área; subarea es el id de la subárea o 'none'.
     if (scope.areaId != null)    qs.set('area_id', String(scope.areaId));
     if (scope.subarea)           qs.set('subarea', scope.subarea);
-    if (filterStatus !== 'all')  qs.set('estado', filterStatus);
+    if (filterStatus !== 'all' && filterStatus !== VOICEMAIL_STATUS) qs.set('estado', filterStatus);
+    if (filterStatus === VOICEMAIL_STATUS) qs.set('estado', 'completed');
     if (filterCampaign)          qs.set('campana', filterCampaign);
     if (searchQuery)             qs.set('cliente', searchQuery);
     if (dateStart)               qs.set('fecha_inicio', dateStart);
@@ -236,13 +239,22 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
       });
       if (res.ok) {
         const data = await res.json();
+        const incoming = data.items || [];
+        const filtered = filterStatus === VOICEMAIL_STATUS
+          ? incoming.filter((c) => getEffectiveStatus(c) === VOICEMAIL_STATUS)
+          : incoming;
+
         setTotal(data.total ?? 0);
         setPage(data.page ?? pageNum);
-        setCalls(prev => append ? [...prev, ...(data.items || [])] : (data.items || []));
+        setLoadedRawCount((prev) => (append ? prev + incoming.length : incoming.length));
+        setCalls(prev => append ? [...prev, ...filtered] : filtered);
       } else {
         const detail = await res.json().catch(() => null);
         setLoadError(detail?.detail || 'No se pudieron cargar las llamadas');
-        if (!append) setCalls([]);
+        if (!append) {
+          setCalls([]);
+          setLoadedRawCount(0);
+        }
       }
     } catch (err) {
       if (err.message !== 'Unauthorized') {
@@ -258,6 +270,15 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
   useEffect(() => {
     load(1, { append: false });
   }, [load]);
+
+  // Refresco periódico para mantener la vista al día sin recargar la página.
+  useEffect(() => {
+    if (!authToken) return;
+    const timer = setInterval(() => {
+      load(1, { append: false });
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [authToken, load]);
 
   // ── Scroll infinito (IntersectionObserver sobre un centinela) ──
   const sentinelRef = useRef(null);
@@ -397,10 +418,11 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
             className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition"
           >
             <option value="all">Todos los estados</option>
-            <option value="active">Activas</option>
-            <option value="completed">Completadas</option>
-            <option value="pending">Pendientes</option>
-            <option value="failed">Fallidas</option>
+            <option value="ringing">Timbrando</option>
+            <option value="active">Activa</option>
+            <option value="completed">Completada</option>
+            <option value="voicemail">Buzón</option>
+            <option value="failed">Fallida</option>
           </select>
 
           <button
