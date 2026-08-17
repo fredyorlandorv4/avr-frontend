@@ -124,13 +124,29 @@ const formatDuration = (seconds) => {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 
+function toReportRow(call) {
+  return {
+    id: call.id || call.call_id,
+    callIds: [call.id, call.call_id].filter((value) => value != null).map(String),
+    project: valueAt(call, ['project_name', 'project.name', 'campaign.project_name', 'campaign.project.name', 'campaign_name']) || '—',
+    client: valueAt(call, ['client_name', 'client.name', 'contact_name']) || '—',
+    calledAt: formatDateTime(valueAt(call, ['created_at', 'called_at', 'start_time'])),
+    status: statusLabels[String(call.status || '').toLowerCase()] || call.status || '—',
+    duration: formatDuration(call.duration),
+    commitment: commitmentDate(call) || '—',
+    transcription: call.transcription || '—',
+  };
+}
+
 function downloadExcel(rows, dateHeader) {
-  const headers = ['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader];
-  const values = rows.map((row) => [row.project, row.client, row.calledAt, row.status, row.duration, row.commitment]);
+  const headers = ['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader, 'Follow Ups', 'Transcripción'];
+  const values = rows.map((row) => [row.project, row.client, row.calledAt, row.status, row.duration, row.commitment, row.followUps, row.transcription]);
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
   worksheet['!cols'] = headers.map((header, index) => ({
     // El ancho se expresa en caracteres y se limita para evitar hojas inmanejables.
-    wch: Math.min(60, Math.max(header.length, ...values.map((row) => String(row[index] || '—').length)) + 2),
+    wch: header === 'Transcripción'
+      ? 32
+      : Math.min(60, Math.max(header.length, ...values.map((row) => String(row[index] || '—').length)) + 2),
   }));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Reportes');
@@ -174,6 +190,23 @@ export default function ReportsView() {
     return all;
   }, [authToken, logout, queryFor]);
 
+  const fetchFollowUps = useCallback(async () => {
+    const all = [];
+    let skip = 0;
+    while (true) {
+      const params = new URLSearchParams({ skip: String(skip), limit: String(PAGE_SIZE) });
+      if (scope.areaId != null) params.set('area_id', String(scope.areaId));
+      if (scope.subarea) params.set('subarea', scope.subarea);
+      const response = await apiFetch(`/api/v1/follow-ups?${params.toString()}`, { token: authToken, onUnauthorized: logout });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'No se pudieron cargar los follow-ups.');
+      const payload = await response.json();
+      const items = Array.isArray(payload) ? payload : (payload.items || payload.results || payload.data || []);
+      all.push(...items);
+      if (items.length < PAGE_SIZE) return all;
+      skip += items.length;
+    }
+  }, [authToken, logout, scope]);
+
   const load = useCallback(async () => {
     if (!authToken) return;
     setLoading(true); setError('');
@@ -184,15 +217,7 @@ export default function ReportsView() {
 
   useEffect(() => { load(); }, [load]);
 
-  const rows = useMemo(() => calls.map((call) => ({
-    id: call.id || call.call_id,
-    project: valueAt(call, ['project_name', 'project.name', 'campaign.project_name', 'campaign.project.name', 'campaign_name']) || '—',
-    client: valueAt(call, ['client_name', 'client.name', 'contact_name']) || '—',
-    calledAt: formatDateTime(valueAt(call, ['created_at', 'called_at', 'start_time'])),
-    status: statusLabels[String(call.status || '').toLowerCase()] || call.status || '—',
-    duration: formatDuration(call.duration),
-    commitment: commitmentDate(call) || '—',
-  })), [calls]);
+  const rows = useMemo(() => calls.map(toReportRow), [calls]);
   const activeAreaName = effectiveAreaId != null
     ? (areas.find((area) => area.id === effectiveAreaId)?.area || '')
     : areaName;
@@ -209,7 +234,22 @@ export default function ReportsView() {
   const changeEnd = (value) => { setDateEnd(value); if (dateStart && value < dateStart) setDateStart(value); };
   const exportRows = async () => {
     setExporting(true); setError('');
-    try { downloadExcel(calls.length ? rows : (await fetchAll()).map((call) => ({ project: valueAt(call, ['project_name', 'campaign_name']) || '—', client: call.client_name || '—', calledAt: formatDateTime(call.created_at), status: statusLabels[String(call.status || '').toLowerCase()] || call.status || '—', duration: formatDuration(call.duration), commitment: commitmentDate(call) || '—' })), dateHeader); }
+    try {
+      const sourceRows = calls.length ? rows : (await fetchAll()).map(toReportRow);
+      const followUps = await fetchFollowUps();
+      const followUpsByCallId = new Map();
+      followUps.forEach((followUp) => {
+        if (followUp.call_id == null) return;
+        const key = String(followUp.call_id);
+        const text = String(followUp.notes || '').split('|').map((part) => part.trim()).filter(Boolean).join('\n');
+        if (!text) return;
+        followUpsByCallId.set(key, [...(followUpsByCallId.get(key) || []), text]);
+      });
+      downloadExcel(sourceRows.map((row) => ({
+        ...row,
+        followUps: row.callIds.flatMap((id) => followUpsByCallId.get(id) || []).filter((text, index, texts) => texts.indexOf(text) === index).join('\n\n') || '—',
+      })), dateHeader);
+    }
     catch (err) { if (err.message !== 'Unauthorized') setError(err.message || 'No se pudo exportar el reporte.'); }
     finally { setExporting(false); }
   };
