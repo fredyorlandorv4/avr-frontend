@@ -24,45 +24,59 @@ const valueAt = (source, paths) => {
   return '';
 };
 
-function commitmentDate(call) {
-  const direct = valueAt(call, [
-    'analysis.payment_commitment_date', 'analysis.commitment_payment_date',
-    'analysis.commitment_date', 'analysis.fecha_compromiso_pago',
-  ]);
-  if (direct) return typeof direct === 'object' ? JSON.stringify(direct) : direct;
+const MONTHS = {
+  enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+  julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9,
+  noviembre: 10, diciembre: 11,
+};
+const WEEKDAYS = { domingo: 0, lunes: 1, martes: 2, miercoles: 3, miércoles: 3, jueves: 4, viernes: 5, sabado: 6, sábado: 6 };
 
-  // El reporte toma el dato únicamente del mismo objeto que muestra el botón
-  // "Análisis" en el monitor. Puede venir como campo o dentro de un texto del análisis.
-  const date = '(?:\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{2,4})?|\\d{1,2}\\s+de\\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\\s+de\\s+\\d{4})?|hoy|ma[ñn]ana|lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo)';
-  const textPatterns = [
-    new RegExp(`(?:fecha\\s+de\\s+)?compromiso(?:\\s+de\\s+pago)?\\s*[:-]?\\s*([^\\n.]{3,80})`, 'i'),
-    new RegExp(`(?:se\\s+)?compromet(?:e|ió|era)[\\s\\S]{0,90}?(${date})`, 'i'),
-    new RegExp(`(?:pagar(?:á|a)?|realizar(?:á|a)?\\s+(?:el\\s+)?pago)[\\s\\S]{0,90}?(${date})`, 'i'),
-  ];
-  const findDateInText = (value) => {
-    if (typeof value !== 'string') return '';
-    for (const pattern of textPatterns) {
-      const match = value.match(pattern);
-      if (match) return match[1].trim();
-    }
-    return '';
+const formatCommitmentDate = (date) => date.toLocaleDateString('es-GT', {
+  day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
+});
+
+function commitmentDate(call) {
+  // "Resumen" es la fuente acordada: evita mostrar textos de follow-up u otros
+  // campos del análisis que no son una fecha de compromiso.
+  const summary = call.analysis?.summary;
+  if (typeof summary !== 'string') return '';
+  const normalized = summary.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!/(compromet|compromiso|pagara|pagar|pago)/.test(normalized)) return '';
+
+  const callDate = new Date(call.created_at || call.called_at || Date.now());
+  if (Number.isNaN(callDate.getTime())) return '';
+  const base = new Date(Date.UTC(callDate.getUTCFullYear(), callDate.getUTCMonth(), callDate.getUTCDate()));
+  const makeDate = (year, month, day) => {
+    const result = new Date(Date.UTC(year, month, Number(day)));
+    return result.getUTCMonth() === month && result.getUTCDate() === Number(day) ? result : null;
   };
 
-  const queue = [call.analysis];
-  const seen = new Set();
-  while (queue.length) {
-    const item = queue.shift();
-    if (!item || typeof item !== 'object' || seen.has(item)) continue;
-    seen.add(item);
-    for (const [key, value] of Object.entries(item)) {
-      const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (typeof value !== 'object' && /(?:commitment|compromiso).*(?:payment|pago|date|fecha)|(?:payment|pago).*(?:commitment|compromiso)/.test(normalized)) {
-        return String(value);
-      }
-      const dateInText = findDateInText(value);
-      if (dateInText) return dateInText;
-      if (value && typeof value === 'object') queue.push(value);
-    }
+  // Primero se prefieren fechas completas: "martes 18 de agosto" debe ganar
+  // sobre la palabra "mañana" que puede aparecer antes en la misma oración.
+  const explicit = normalized.match(/\b(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s+de\s+(\d{4}))?\b/);
+  if (explicit) {
+    const result = makeDate(Number(explicit[3]) || base.getUTCFullYear(), MONTHS[explicit[2]], explicit[1]);
+    if (result) return formatCommitmentDate(result);
+  }
+
+  const thisMonth = normalized.match(/\b(?:(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+)?(\d{1,2})\s+de\s+este\s+mes\b/);
+  if (thisMonth) {
+    const result = makeDate(base.getUTCFullYear(), base.getUTCMonth(), thisMonth[1]);
+    if (result) return formatCommitmentDate(result);
+  }
+
+  const nextWeek = normalized.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+de\s+la\s+proxima\s+semana\b/);
+  if (nextWeek) {
+    const daysUntil = (WEEKDAYS[nextWeek[1]] - base.getUTCDay() + 7) % 7;
+    const result = new Date(base);
+    result.setUTCDate(result.getUTCDate() + daysUntil + 7);
+    return formatCommitmentDate(result);
+  }
+
+  if (/\bmanana\b/.test(normalized)) {
+    const result = new Date(base);
+    result.setUTCDate(result.getUTCDate() + 1);
+    return formatCommitmentDate(result);
   }
   return '';
 }
