@@ -192,8 +192,9 @@ export default function ReportsView() {
 
   const fetchFollowUps = useCallback(async () => {
     const all = [];
+    const seenIds = new Set();
     let skip = 0;
-    while (true) {
+    while (skip < 10000) {
       const params = new URLSearchParams({ skip: String(skip), limit: String(PAGE_SIZE) });
       if (scope.areaId != null) params.set('area_id', String(scope.areaId));
       if (scope.subarea) params.set('subarea', scope.subarea);
@@ -201,10 +202,20 @@ export default function ReportsView() {
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'No se pudieron cargar los follow-ups.');
       const payload = await response.json();
       const items = Array.isArray(payload) ? payload : (payload.items || payload.results || payload.data || []);
-      all.push(...items);
+      // Algunos backends ignoran `skip` y responden siempre la primera página.
+      // En ese caso, detenerse evita que Exportar quede permanentemente cargando.
+      const newItems = items.filter((item) => {
+        const id = item.id ?? `${item.call_id || ''}:${item.notes || ''}:${item.created_at || ''}`;
+        if (seenIds.has(id)) return false;
+        seenIds.add(id);
+        return true;
+      });
+      all.push(...newItems);
+      if (newItems.length === 0) return all;
       if (items.length < PAGE_SIZE) return all;
       skip += items.length;
     }
+    return all;
   }, [authToken, logout, scope]);
 
   const load = useCallback(async () => {
