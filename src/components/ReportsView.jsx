@@ -12,7 +12,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const statusLabels = {
   ringing: 'Timbrando', answered: 'Contestada', completed: 'Completada',
   active: 'Activa', pending: 'Pendiente', failed: 'Fallida',
-  'no-answer': 'Sin respuesta', no_answer: 'Sin respuesta', busy: 'Ocupado',
+  'no-answer': 'Buzón', no_answer: 'Buzón', busy: 'Ocupado',
   cancelled: 'Cancelada', initiated: 'Iniciada', voicemail: 'Buzón',
 };
 
@@ -26,15 +26,29 @@ const valueAt = (source, paths) => {
 
 function commitmentDate(call) {
   const direct = valueAt(call, [
-    'payment_commitment_date', 'commitment_payment_date', 'commitment_date',
-    'fecha_compromiso_pago', 'analysis.payment_commitment_date',
+    'analysis.payment_commitment_date', 'analysis.commitment_payment_date',
     'analysis.commitment_date', 'analysis.fecha_compromiso_pago',
   ]);
   if (direct) return typeof direct === 'object' ? JSON.stringify(direct) : direct;
 
-  // La estructura de análisis puede variar entre campañas; se busca una fecha en
-  // cualquier campo que identifique explícitamente el compromiso de pago.
-  const queue = [call.analysis, call];
+  // El reporte toma el dato únicamente del mismo objeto que muestra el botón
+  // "Análisis" en el monitor. Puede venir como campo o dentro de un texto del análisis.
+  const date = '(?:\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{2,4})?|\\d{1,2}\\s+de\\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\\s+de\\s+\\d{4})?|hoy|ma[ñn]ana|lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bado|domingo)';
+  const textPatterns = [
+    new RegExp(`(?:fecha\\s+de\\s+)?compromiso(?:\\s+de\\s+pago)?\\s*[:-]?\\s*([^\\n.]{3,80})`, 'i'),
+    new RegExp(`(?:se\\s+)?compromet(?:e|ió|era)[\\s\\S]{0,90}?(${date})`, 'i'),
+    new RegExp(`(?:pagar(?:á|a)?|realizar(?:á|a)?\\s+(?:el\\s+)?pago)[\\s\\S]{0,90}?(${date})`, 'i'),
+  ];
+  const findDateInText = (value) => {
+    if (typeof value !== 'string') return '';
+    for (const pattern of textPatterns) {
+      const match = value.match(pattern);
+      if (match) return match[1].trim();
+    }
+    return '';
+  };
+
+  const queue = [call.analysis];
   const seen = new Set();
   while (queue.length) {
     const item = queue.shift();
@@ -45,12 +59,11 @@ function commitmentDate(call) {
       if (typeof value !== 'object' && /(?:commitment|compromiso).*(?:payment|pago|date|fecha)|(?:payment|pago).*(?:commitment|compromiso)/.test(normalized)) {
         return String(value);
       }
+      const dateInText = findDateInText(value);
+      if (dateInText) return dateInText;
       if (value && typeof value === 'object') queue.push(value);
     }
   }
-  const transcription = String(call.transcription || '');
-  const match = transcription.match(/(?:fecha\s+de\s+)?compromiso(?:\s+de\s+pago)?\s*[:-]?\s*([^\n.]{3,80})/i);
-  if (match) return match[1].trim();
   return '';
 }
 
