@@ -125,8 +125,8 @@ const formatDuration = (seconds) => {
 };
 
 function downloadExcel(rows) {
-  const headers = ['Empresa', 'Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', 'Fecha de compromiso de pago'];
-  const values = rows.map((row) => [row.company, row.project, row.client, row.calledAt, row.status, row.duration, row.commitment]);
+  const headers = ['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', 'Fecha de compromiso de pago'];
+  const values = rows.map((row) => [row.project, row.client, row.calledAt, row.status, row.duration, row.commitment]);
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
   worksheet['!cols'] = headers.map((header, index) => ({
     // El ancho se expresa en caracteres y se limita para evitar hojas inmanejables.
@@ -186,7 +186,6 @@ export default function ReportsView() {
 
   const rows = useMemo(() => calls.map((call) => ({
     id: call.id || call.call_id,
-    company: valueAt(call, ['company_name', 'client_company', 'empresa', 'client.company_name', 'client.company.name', 'campaign.company_name']) || '—',
     project: valueAt(call, ['project_name', 'project.name', 'campaign.project_name', 'campaign.project.name', 'campaign_name']) || '—',
     client: valueAt(call, ['client_name', 'client.name', 'contact_name']) || '—',
     calledAt: formatDateTime(valueAt(call, ['created_at', 'called_at', 'start_time'])),
@@ -201,7 +200,7 @@ export default function ReportsView() {
   const changeEnd = (value) => { setDateEnd(value); if (dateStart && value < dateStart) setDateStart(value); };
   const exportRows = async () => {
     setExporting(true); setError('');
-    try { downloadExcel(calls.length ? rows : (await fetchAll()).map((call) => ({ company: valueAt(call, ['company_name', 'client_company', 'empresa']) || '—', project: valueAt(call, ['project_name', 'campaign_name']) || '—', client: call.client_name || '—', calledAt: formatDateTime(call.created_at), status: statusLabels[String(call.status || '').toLowerCase()] || call.status || '—', duration: formatDuration(call.duration), commitment: commitmentDate(call) || '—' }))); }
+    try { downloadExcel(calls.length ? rows : (await fetchAll()).map((call) => ({ project: valueAt(call, ['project_name', 'campaign_name']) || '—', client: call.client_name || '—', calledAt: formatDateTime(call.created_at), status: statusLabels[String(call.status || '').toLowerCase()] || call.status || '—', duration: formatDuration(call.duration), commitment: commitmentDate(call) || '—' }))); }
     catch (err) { if (err.message !== 'Unauthorized') setError(err.message || 'No se pudo exportar el reporte.'); }
     finally { setExporting(false); }
   };
@@ -216,7 +215,7 @@ export default function ReportsView() {
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </section>
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Empresa', 'Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', 'Fecha de compromiso de pago'].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan="7" className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.company}</td><td className="px-4 py-3">{row.project}</td><td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td></tr>) : <tr><td colSpan="7" className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', 'Fecha de compromiso de pago'].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.project}</td><td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td></tr>) : <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
       {rows.length > TABLE_PAGE_SIZE && <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600"><span>Página {tablePage} de {totalPages}</span><div className="flex gap-2"><button onClick={() => setTablePage((page) => page - 1)} disabled={tablePage === 1} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Anterior</button><button onClick={() => setTablePage((page) => page + 1)} disabled={tablePage === totalPages} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Siguiente</button></div></div>}
     </section>
   </div>;

@@ -181,6 +181,8 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
   const [loadingMore, setLoadingMore] = useState(false);   // scroll infinito
   const [loadError,   setLoadError]   = useState(null);
   const [loadedRawCount, setLoadedRawCount] = useState(0);
+  // Debe declararse antes del efecto de auto-refresco, que depende de este estado.
+  const [activeAudioId, setActiveAudioId] = useState(null);
 
   const hasMore = loadedRawCount < total;
 
@@ -273,12 +275,14 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
 
   // Refresco periódico para mantener la vista al día sin recargar la página.
   useEffect(() => {
-    if (!authToken) return;
+    // No recargar mientras el usuario escucha una llamada: una recarga reemplaza
+    // las tarjetas y corta la reproducción del audio.
+    if (!authToken || activeAudioId != null) return;
     const timer = setInterval(() => {
       load(1, { append: false });
     }, AUTO_REFRESH_MS);
     return () => clearInterval(timer);
-  }, [authToken, load]);
+  }, [authToken, load, activeAudioId]);
 
   // ── Scroll infinito (IntersectionObserver sobre un centinela) ──
   const sentinelRef = useRef(null);
@@ -319,7 +323,6 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
   const refresh = useCallback(() => { load(1, { append: false }); }, [load]);
 
   // ── Audio player ──────────────────────────────────────────
-  const [activeAudioId, setActiveAudioId] = useState(null);
   const [audioLoading,  setAudioLoading]  = useState({});
   const [audioError,    setAudioError]    = useState({});
   const blobCache = useRef({});
@@ -605,6 +608,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
                             src={blobUrl}
                             controls
                             autoPlay
+                            onEnded={() => setActiveAudioId(null)}
                             className="w-full h-10"
                           />
                           <button
