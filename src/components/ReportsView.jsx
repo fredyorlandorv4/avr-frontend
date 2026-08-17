@@ -50,6 +50,21 @@ function commitmentDate(call) {
     const result = new Date(Date.UTC(year, month, Number(day)));
     return result.getUTCMonth() === month && result.getUTCDate() === Number(day) ? result : null;
   };
+  const nextWeekday = (weekday, extraWeek = false) => {
+    const result = new Date(base);
+    let daysUntil = (weekday - base.getUTCDay() + 7) % 7;
+    if (daysUntil === 0 || extraWeek) daysUntil += 7;
+    result.setUTCDate(result.getUTCDate() + daysUntil);
+    return result;
+  };
+
+  // Formatos numéricos como "20/08" o "20-08-2026".
+  const numeric = normalized.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+  if (numeric) {
+    const year = numeric[3] ? (numeric[3].length === 2 ? 2000 + Number(numeric[3]) : Number(numeric[3])) : base.getUTCFullYear();
+    const result = makeDate(year, Number(numeric[2]) - 1, numeric[1]);
+    if (result) return formatCommitmentDate(result);
+  }
 
   // Primero se prefieren fechas completas: "martes 18 de agosto" debe ganar
   // sobre la palabra "mañana" que puede aparecer antes en la misma oración.
@@ -59,7 +74,8 @@ function commitmentDate(call) {
     if (result) return formatCommitmentDate(result);
   }
 
-  const thisMonth = normalized.match(/\b(?:(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+)?(\d{1,2})\s+de\s+este\s+mes\b/);
+  // "el día 20 del mes en curso", "20 de este mes" y equivalentes.
+  const thisMonth = normalized.match(/\b(?:dia\s+)?(\d{1,2})\s+(?:del\s+mes\s+(?:en\s+curso|actual)|de\s+(?:este|el)\s+mes)\b/);
   if (thisMonth) {
     const result = makeDate(base.getUTCFullYear(), base.getUTCMonth(), thisMonth[1]);
     if (result) return formatCommitmentDate(result);
@@ -67,10 +83,23 @@ function commitmentDate(call) {
 
   const nextWeek = normalized.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+de\s+la\s+proxima\s+semana\b/);
   if (nextWeek) {
-    const daysUntil = (WEEKDAYS[nextWeek[1]] - base.getUTCDay() + 7) % 7;
-    const result = new Date(base);
-    result.setUTCDate(result.getUTCDate() + daysUntil + 7);
+    return formatCommitmentDate(nextWeekday(WEEKDAYS[nextWeek[1]], true));
+  }
+
+  const upcomingWeekday = normalized.match(/\b(?:el\s+)?(?:proximo\s+|este\s+)?(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  if (upcomingWeekday) {
+    return formatCommitmentDate(nextWeekday(WEEKDAYS[upcomingWeekday[1]]));
+  }
+
+  if (/\b(?:fin(?:al(?:es)?)?|ultimo)\s+de(?:l)?\s+mes\b/.test(normalized)) {
+    const result = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0));
     return formatCommitmentDate(result);
+  }
+  if (/\b(?:inicio|principio|primeros)\s+de(?:l)?\s+mes\b/.test(normalized)) {
+    return formatCommitmentDate(new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 1)));
+  }
+  if (/\bhoy\b/.test(normalized)) {
+    return formatCommitmentDate(base);
   }
 
   if (/\bmanana\b/.test(normalized)) {
