@@ -42,7 +42,7 @@ function commitmentDate(call) {
   const summary = call.analysis?.summary;
   if (typeof summary !== 'string') return '';
   const normalized = summary.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (!/(compromet|compromiso|pagara|pagar|pago)/.test(normalized)) return '';
+  if (!/(compromet|compromiso|pagara|pagar|pago|cita|agend)/.test(normalized)) return '';
 
   const callDate = new Date(call.created_at || call.called_at || Date.now());
   if (Number.isNaN(callDate.getTime())) return '';
@@ -124,8 +124,8 @@ const formatDuration = (seconds) => {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 
-function downloadExcel(rows) {
-  const headers = ['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', 'Fecha de compromiso de pago'];
+function downloadExcel(rows, dateHeader) {
+  const headers = ['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader];
   const values = rows.map((row) => [row.project, row.client, row.calledAt, row.status, row.duration, row.commitment]);
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
   worksheet['!cols'] = headers.map((header, index) => ({
@@ -138,8 +138,8 @@ function downloadExcel(rows) {
 }
 
 export default function ReportsView() {
-  const { authToken, logout } = useAuth();
-  const { scope } = useArea();
+  const { authToken, logout, areaName, isAdmin } = useAuth();
+  const { scope, effectiveAreaId, areas } = useArea();
   const [dateStart, setDateStart] = useState(today);
   const [dateEnd, setDateEnd] = useState(today);
   const [calls, setCalls] = useState([]);
@@ -193,6 +193,15 @@ export default function ReportsView() {
     duration: formatDuration(call.duration),
     commitment: commitmentDate(call) || '—',
   })), [calls]);
+  const activeAreaName = effectiveAreaId != null
+    ? (areas.find((area) => area.id === effectiveAreaId)?.area || '')
+    : areaName;
+  const isTelemarketing = activeAreaName.trim().toLowerCase() === 'telemarketing';
+  const dateHeader = isTelemarketing
+    ? 'Fecha de cita'
+    : isAdmin && effectiveAreaId == null
+      ? 'Fecha de compromiso / cita'
+      : 'Fecha compromiso de pago';
   const totalPages = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
   const visibleRows = rows.slice((tablePage - 1) * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE);
 
@@ -200,7 +209,7 @@ export default function ReportsView() {
   const changeEnd = (value) => { setDateEnd(value); if (dateStart && value < dateStart) setDateStart(value); };
   const exportRows = async () => {
     setExporting(true); setError('');
-    try { downloadExcel(calls.length ? rows : (await fetchAll()).map((call) => ({ project: valueAt(call, ['project_name', 'campaign_name']) || '—', client: call.client_name || '—', calledAt: formatDateTime(call.created_at), status: statusLabels[String(call.status || '').toLowerCase()] || call.status || '—', duration: formatDuration(call.duration), commitment: commitmentDate(call) || '—' }))); }
+    try { downloadExcel(calls.length ? rows : (await fetchAll()).map((call) => ({ project: valueAt(call, ['project_name', 'campaign_name']) || '—', client: call.client_name || '—', calledAt: formatDateTime(call.created_at), status: statusLabels[String(call.status || '').toLowerCase()] || call.status || '—', duration: formatDuration(call.duration), commitment: commitmentDate(call) || '—' })), dateHeader); }
     catch (err) { if (err.message !== 'Unauthorized') setError(err.message || 'No se pudo exportar el reporte.'); }
     finally { setExporting(false); }
   };
@@ -215,7 +224,7 @@ export default function ReportsView() {
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </section>
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', 'Fecha de compromiso de pago'].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.project}</td><td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td></tr>) : <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.project}</td><td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td></tr>) : <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
       {rows.length > TABLE_PAGE_SIZE && <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600"><span>Página {tablePage} de {totalPages}</span><div className="flex gap-2"><button onClick={() => setTablePage((page) => page - 1)} disabled={tablePage === 1} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Anterior</button><button onClick={() => setTablePage((page) => page + 1)} disabled={tablePage === totalPages} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Siguiente</button></div></div>}
     </section>
   </div>;
