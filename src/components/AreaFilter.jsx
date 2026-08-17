@@ -8,23 +8,23 @@ const selectCls =
  * Selector de alcance de datos. El estado vive en AreaContext, así que el filtro
  * es consistente entre Dashboard, Monitor de Llamadas y Campañas.
  *
- * - Área: sólo para usuarios del área "system". El resto siempre ve la suya.
+ * - Área: sólo para administradores. El resto siempre ve la suya.
  * - Subárea: sólo si el área en contexto maneja subáreas. Permite ver el área
  *   completa, una subárea concreta, o lo que no está categorizado.
  */
 export default function AreaFilter({ className = '' }) {
-  const { isSystem } = useAuth();
+  const { isAdmin } = useAuth();
   const {
     areas, selectedAreaId, selectArea,
     availableSubareas, hasSubareas, categoria, selectCategoria,
   } = useArea();
 
   // Un usuario no-system cuya área no tiene subáreas no tiene nada que elegir.
-  if (!isSystem && !hasSubareas) return null;
+  if (!isAdmin && !hasSubareas) return null;
 
   return (
     <>
-      {isSystem && (
+      {isAdmin && (
         <select
           value={selectedAreaId ?? ''}
           onChange={(e) => selectArea(e.target.value)}

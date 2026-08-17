@@ -5,7 +5,7 @@ import { apiFetch } from '../api.js';
 const AreaContext = createContext(null);
 
 export function AreaProvider({ children }) {
-  const { authToken, isLoggedIn, isSystem, areaName, logout } = useAuth();
+  const { authToken, isLoggedIn, isAdmin, areaName, logout } = useAuth();
 
   const [areas, setAreas] = useState([]);
   const [subareas, setSubareas] = useState([]);
@@ -15,10 +15,10 @@ export function AreaProvider({ children }) {
   // 'all' = área completa | 'none' = sin categorizar | <id> = esa subárea.
   const [rawCategoria, setCategoria] = useState('all');
 
-  // Solo los usuarios del área "system" pueden filtrar por área, así que solo ellos
-  // necesitan la lista. El resto siempre ve su propia área (la fuerza el backend).
+  // Los administradores pueden consultar todas las áreas; los demás conservan
+  // el alcance de su área asignada, que el backend aplica en cada consulta.
   useEffect(() => {
-    if (!isLoggedIn || !authToken || !isSystem) return;
+    if (!isLoggedIn || !authToken || !isAdmin) return;
     let cancelled = false;
     (async () => {
       try {
@@ -32,7 +32,7 @@ export function AreaProvider({ children }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [isLoggedIn, authToken, isSystem, logout]);
+  }, [isLoggedIn, authToken, isAdmin, logout]);
 
   // Las subáreas las necesitan todos: definen si el área en contexto se puede
   // desglosar. El listado completo es el único que trae el id ({id, uuid, name, area}).
@@ -64,15 +64,15 @@ export function AreaProvider({ children }) {
   )?.id ?? null;
 
   // Área efectiva del filtro:
-  //  - usuario NO system: null (no envía nada; el backend fuerza su propia área).
-  //  - usuario system: lo que elija; "system" o sin selección => null (todas).
-  const effectiveAreaId = !isSystem
+  //  - no administrador: null (el backend fuerza su propia área).
+  //  - administrador: lo que elija; "system" o sin selección => null (todas).
+  const effectiveAreaId = !isAdmin
     ? null
     : (selectedAreaId == null || selectedAreaId === systemAreaId ? null : selectedAreaId);
 
-  // Área en contexto: la elegida por el system-admin, o la propia para el resto.
-  // Sin área en contexto (system viendo "todas") no hay subáreas que ofrecer.
-  const contextAreaName = isSystem
+  // Área en contexto: la elegida por el administrador, o la propia para el resto.
+  // Sin área en contexto (administrador viendo "todas") no hay subáreas que ofrecer.
+  const contextAreaName = isAdmin
     ? (areas.find((a) => a.id === effectiveAreaId)?.area || '')
     : (areaName || '');
 

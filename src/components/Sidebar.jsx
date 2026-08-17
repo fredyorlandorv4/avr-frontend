@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const ADMIN_ONLY = new Set(['reports', 'prompts', 'users', 'settings']);
+const ADMIN_ONLY = new Set(['prompts', 'users', 'settings']);
 // El área de marketing (telemarketing) no accede a proyectos.
 const TELEMARKETING_HIDDEN = new Set(['projects']);
 

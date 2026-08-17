@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Phone, Bell, Menu, X, BarChart3, Users } from 'lucide-react';
+import { Phone, Bell, Menu, X, Users } from 'lucide-react';
 
 import { useAuth } from './context/AuthContext.jsx';
 import { useArea } from './context/AreaContext.jsx';
@@ -13,6 +13,7 @@ import TranscriptionModal from './components/TranscriptionModal.jsx';
 import AnalysisModal from './components/AnalysisModal.jsx';
 import DashboardView from './components/DashboardView.jsx';
 import CallsMonitorView from './components/CallsMonitorView.jsx';
+import ReportsView from './components/ReportsView.jsx';
 import CampaignListView from './components/CampaignListView.jsx';
 import CreateCampaignView from './components/CreateCampaignView.jsx';
 import CampaignContactsView from './components/CampaignContactsView.jsx';
@@ -144,7 +145,7 @@ function Layout() {
 
 // ─── Placeholder for "coming soon" admin sections ─────────────────────────────
 
-function ComingSoon({ Icon, title }) {
+function _ComingSoon({ Icon, title }) {
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-4">
       <div className="relative w-full max-w-md overflow-hidden bg-white border border-gray-100 rounded-3xl shadow-sm px-8 py-12 text-center">
@@ -540,9 +541,7 @@ function AppShell() {
             />
           } />
 
-          <Route path="/reports" element={
-            isAdmin ? <ComingSoon Icon={BarChart3} title="Módulo de Reportes" /> : <Navigate to="/dashboard" replace />
-          } />
+          <Route path="/reports" element={<ReportsView />} />
 
           <Route path="/campaigns" element={
             <CampaignListView
