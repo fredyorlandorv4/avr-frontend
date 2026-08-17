@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, RefreshCw } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
@@ -123,27 +124,17 @@ const formatDuration = (seconds) => {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 };
 
-const xmlEscape = (value) => String(value ?? '')
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
-
 function downloadExcel(rows) {
   const headers = ['Empresa', 'Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', 'Fecha de compromiso de pago'];
   const values = rows.map((row) => [row.company, row.project, row.client, row.calledAt, row.status, row.duration, row.commitment]);
-  const widths = headers.map((header, index) => Math.min(420, Math.max(80, Math.max(header.length, ...values.map((row) => String(row[index] || '').length)) * 7.2 + 14)));
-  const cells = (row, style) => row.map((value) => `<Cell ss:StyleID="${style}"><Data ss:Type="String">${xmlEscape(value || '—')}</Data></Cell>`).join('');
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles><Style ss:ID="header"><Font ss:Bold="1"/><Interior ss:Color="#053E68" ss:Pattern="Solid"/><Font ss:Color="#FFFFFF" ss:Bold="1"/></Style><Style ss:ID="cell"><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style></Styles>
-  <Worksheet ss:Name="Reportes"><Table>${widths.map((width) => `<Column ss:Width="${width}"/>`).join('')}<Row>${cells(headers, 'header')}</Row>${values.map((row) => `<Row>${cells(row, 'cell')}</Row>`).join('')}</Table></Worksheet>
-</Workbook>`;
-  const blob = new Blob([`\ufeff${xml}`], { type: 'application/vnd.ms-excel;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `reporte-llamadas-${today()}.xls`;
-  link.click();
-  URL.revokeObjectURL(url);
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
+  worksheet['!cols'] = headers.map((header, index) => ({
+    // El ancho se expresa en caracteres y se limita para evitar hojas inmanejables.
+    wch: Math.min(60, Math.max(header.length, ...values.map((row) => String(row[index] || '—').length)) + 2),
+  }));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Reportes');
+  XLSX.writeFile(workbook, `reporte-llamadas-${today()}.xlsx`, { compression: true });
 }
 
 export default function ReportsView() {
