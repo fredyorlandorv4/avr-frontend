@@ -13,7 +13,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const statusLabels = {
   ringing: 'Timbrando', answered: 'Contestada', completed: 'Completada',
   active: 'Activa', pending: 'Pendiente', failed: 'Fallida',
-  'no-answer': 'Buzón', no_answer: 'Buzón', busy: 'Ocupado',
+  'no-answer': 'Sin respuesta', no_answer: 'Sin respuesta', busy: 'Ocupado',
   cancelled: 'Cancelada', initiated: 'Iniciada', voicemail: 'Buzón',
 };
 
@@ -125,7 +125,9 @@ const formatDuration = (seconds) => {
 };
 
 function toReportRow(call) {
-  return {
+  const isVoicemail = Boolean(call.voicemail_detected ?? call.voicemailDetected ?? call.analysis?.voicemail_detection?.detected);
+  const isCobros = String(call.area_name || call.area || '').trim().toLowerCase() === 'cobros';
+  const row = {
     id: call.id || call.call_id,
     callIds: [call.id, call.call_id].filter((value) => value != null).map(String),
     project: valueAt(call, ['project_name', 'project.name', 'campaign.project_name', 'campaign.project.name', 'campaign_name']) || '—',
@@ -136,11 +138,21 @@ function toReportRow(call) {
     commitment: commitmentDate(call) || '—',
     transcription: call.transcription || '—',
   };
+  return {
+    ...row,
+    lote: isCobros ? (valueAt(call, ['lote', 'contact.lote']) || '—') : '',
+    isCobros,
+    status: isVoicemail ? 'Buzón' : row.status,
+  };
 }
 
-function downloadExcel(rows, dateHeader) {
+function downloadExcel(rows, dateHeader, includeLote) {
   const headers = ['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader, 'Follow Ups', 'Transcripción'];
   const values = rows.map((row) => [row.project, row.client, row.calledAt, row.status, row.duration, row.commitment, row.followUps, row.transcription]);
+  if (includeLote) {
+    headers.splice(1, 0, 'Lote');
+    values.forEach((value, index) => value.splice(1, 0, rows[index].lote || '—'));
+  }
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
   worksheet['!cols'] = headers.map((header, index) => ({
     // El ancho se expresa en caracteres y se limita para evitar hojas inmanejables.
@@ -163,6 +175,9 @@ export default function ReportsView() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [tablePage, setTablePage] = useState(1);
+  const [clientInput, setClientInput] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const queryFor = useCallback((page) => {
     const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
@@ -170,8 +185,10 @@ export default function ReportsView() {
     if (scope.subarea) params.set('subarea', scope.subarea);
     if (dateStart) params.set('fecha_inicio', dateStart);
     if (dateEnd) params.set('fecha_fin', dateEnd);
+    if (clientSearch.trim()) params.set('cliente', clientSearch.trim());
+    if (statusFilter) params.set('estado', statusFilter);
     return params.toString();
-  }, [scope, dateStart, dateEnd]);
+  }, [scope, dateStart, dateEnd, clientSearch, statusFilter]);
 
   const fetchAll = useCallback(async () => {
     const all = [];
@@ -229,6 +246,7 @@ export default function ReportsView() {
   useEffect(() => { load(); }, [load]);
 
   const rows = useMemo(() => calls.map(toReportRow), [calls]);
+  const showLoteColumn = rows.some((row) => row.isCobros);
   const activeAreaName = effectiveAreaId != null
     ? (areas.find((area) => area.id === effectiveAreaId)?.area || '')
     : areaName;
@@ -259,7 +277,7 @@ export default function ReportsView() {
       downloadExcel(sourceRows.map((row) => ({
         ...row,
         followUps: row.callIds.flatMap((id) => followUpsByCallId.get(id) || []).filter((text, index, texts) => texts.indexOf(text) === index).join('\n\n') || '—',
-      })), dateHeader);
+      })), dateHeader, sourceRows.some((row) => row.isCobros));
     }
     catch (err) { if (err.message !== 'Unauthorized') setError(err.message || 'No se pudo exportar el reporte.'); }
     finally { setExporting(false); }
@@ -271,11 +289,17 @@ export default function ReportsView() {
         <div><h2 className="text-xl font-bold text-[#053E68]">Reporte de llamadas</h2><p className="text-sm text-gray-400 mt-1">{loading ? 'Cargando...' : `${rows.length} ${rows.length === 1 ? 'llamada' : 'llamadas'}`}</p></div>
         <div className="flex flex-wrap gap-2"><AreaFilter /><button onClick={load} disabled={loading} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button><button onClick={exportRows} disabled={loading || exporting} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#053E68] text-white text-sm font-medium hover:bg-[#06497c] disabled:opacity-50"><Download className="w-4 h-4" />{exporting ? 'Exportando...' : 'Exportar a Excel'}</button></div>
       </div>
-      <div className="grid sm:grid-cols-2 gap-3 max-w-xl"><label className="text-sm text-gray-600">Desde<input type="date" value={dateStart} max={dateEnd || undefined} onChange={(event) => changeStart(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label><label className="text-sm text-gray-600">Hasta<input type="date" value={dateEnd} min={dateStart || undefined} onChange={(event) => changeEnd(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label></div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm text-gray-600 w-40">Desde<input type="date" value={dateStart} max={dateEnd || undefined} onChange={(event) => changeStart(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
+        <label className="text-sm text-gray-600 w-40">Hasta<input type="date" value={dateEnd} min={dateStart || undefined} onChange={(event) => changeEnd(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
+        <label className="text-sm text-gray-600 w-52">Cliente<input type="search" value={clientInput} onChange={(event) => setClientInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') setClientSearch(clientInput); }} placeholder="Nombre de cliente..." className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
+        <label className="text-sm text-gray-600 w-40">Estado<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"><option value="">Todos</option><option value="completed">Completadas</option><option value="voicemail">Buzón</option></select></label>
+        <button onClick={() => setClientSearch(clientInput)} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">Buscar</button>
+      </div>
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </section>
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.project}</td><td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td></tr>) : <tr><td colSpan="6" className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Proyecto', ...(showLoteColumn ? ['Lote'] : []), 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan={showLoteColumn ? 7 : 6} className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.project}</td>{showLoteColumn && <td className="px-4 py-3">{row.lote || '—'}</td>}<td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td></tr>) : <tr><td colSpan={showLoteColumn ? 7 : 6} className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
       {rows.length > TABLE_PAGE_SIZE && <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600"><span>Página {tablePage} de {totalPages}</span><div className="flex gap-2"><button onClick={() => setTablePage((page) => page - 1)} disabled={tablePage === 1} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Anterior</button><button onClick={() => setTablePage((page) => page + 1)} disabled={tablePage === totalPages} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Siguiente</button></div></div>}
     </section>
   </div>;
