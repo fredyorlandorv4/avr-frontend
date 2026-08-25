@@ -140,7 +140,7 @@ function toReportRow(call) {
   };
   return {
     ...row,
-    lote: isCobros ? (valueAt(call, ['lote', 'contact.lote']) || '—') : '',
+    lote: isCobros ? (valueAt(call, ['lote', 'lot', 'contact.lote', 'cobros_campaign.lote']) || '—') : '',
     isCobros,
     status: isVoicemail ? 'Buzón' : row.status,
   };
@@ -178,6 +178,13 @@ export default function ReportsView() {
   const [clientInput, setClientInput] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+
+  // La consulta se actualiza mientras se escribe sin saturar la API con una
+  // petición por cada pulsación.
+  useEffect(() => {
+    const timer = setTimeout(() => setClientSearch(clientInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [clientInput]);
 
   const queryFor = useCallback((page) => {
     const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
@@ -292,9 +299,8 @@ export default function ReportsView() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm text-gray-600 w-40">Desde<input type="date" value={dateStart} max={dateEnd || undefined} onChange={(event) => changeStart(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
         <label className="text-sm text-gray-600 w-40">Hasta<input type="date" value={dateEnd} min={dateStart || undefined} onChange={(event) => changeEnd(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
-        <label className="text-sm text-gray-600 w-52">Cliente<input type="search" value={clientInput} onChange={(event) => setClientInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') setClientSearch(clientInput); }} placeholder="Nombre de cliente..." className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
+        <label className="text-sm text-gray-600 w-52">Cliente<input type="search" value={clientInput} onChange={(event) => setClientInput(event.target.value)} placeholder="Nombre de cliente..." className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
         <label className="text-sm text-gray-600 w-40">Estado<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"><option value="">Todos</option><option value="completed">Completadas</option><option value="voicemail">Buzón</option></select></label>
-        <button onClick={() => setClientSearch(clientInput)} className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">Buscar</button>
       </div>
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </section>
