@@ -216,6 +216,11 @@ export default function ReportsView() {
 
   const fetchCobrosLots = useCallback(async (loadedCalls) => {
     const callIds = new Set(loadedCalls.map((call) => String(call.id ?? '')).filter(Boolean));
+    const reportCampaignNames = new Set(
+      loadedCalls
+        .map((call) => String(call.campaign_name || '').trim())
+        .filter(Boolean),
+    );
     const lotsByCallId = new Map();
     let skip = 0;
 
@@ -229,20 +234,31 @@ export default function ReportsView() {
       if (!campaignsResponse.ok) break;
 
       const campaigns = await campaignsResponse.json();
-      const cobrosCampaigns = campaigns.filter((campaign) => String(campaign.area_name || '').trim().toLowerCase() === 'cobros');
+      const cobrosCampaigns = campaigns.filter((campaign) => (
+        String(campaign.area_name || '').trim().toLowerCase() === 'cobros'
+        && reportCampaignNames.has(String(campaign.name || '').trim())
+      ));
 
       for (const campaign of cobrosCampaigns) {
-        const contactsResponse = await apiFetch(`/api/v1/campaigns/contacts_by_campaing/${campaign.id}`, { token: authToken, onUnauthorized: logout });
-        if (!contactsResponse.ok) continue;
-        const payload = await contactsResponse.json();
-        const contacts = payload.contacts || [];
-        contacts.forEach((contact) => {
-          const callId = String(contact.call_id ?? '');
-          if (callId && callIds.has(callId) && contact.lote) {
-            const currentLots = lotsByCallId.get(callId) || [];
-            if (!currentLots.includes(contact.lote)) lotsByCallId.set(callId, [...currentLots, contact.lote]);
+        try {
+          const contactsResponse = await apiFetch(`/api/v1/campaigns/contacts_by_campaing/${campaign.id}`, { token: authToken, onUnauthorized: logout });
+          if (!contactsResponse.ok) {
+            console.warn(`No se pudieron cargar contactos para campaña ${campaign.id}: ${contactsResponse.status}`);
+            continue;
           }
-        });
+          const payload = await contactsResponse.json();
+          const contacts = payload.contacts || [];
+          contacts.forEach((contact) => {
+            const callId = String(contact.call_id ?? '');
+            if (callId && callIds.has(callId) && contact.lote) {
+              const currentLots = lotsByCallId.get(callId) || [];
+              if (!currentLots.includes(contact.lote)) lotsByCallId.set(callId, [...currentLots, contact.lote]);
+            }
+          });
+        } catch (error) {
+          // Un fallo de una campaña nunca debe impedir visualizar el reporte.
+          console.warn(`Error cargando contactos para campaña ${campaign.id}`, error);
+        }
       }
 
       if (campaigns.length < 100) break;
