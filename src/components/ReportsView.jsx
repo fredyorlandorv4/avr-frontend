@@ -141,17 +141,22 @@ function toReportRow(call) {
   return {
     ...row,
     lote: isCobros ? (valueAt(call, ['lote', 'lot', 'contact.lote', 'cobros_campaign.lote']) || '—') : '',
+    campaignCreator: isCobros ? (call.campaign_creator || '—') : '',
     isCobros,
     status: isVoicemail ? 'Buzón' : row.status,
   };
 }
 
-function downloadExcel(rows, dateHeader, includeLote) {
+function downloadExcel(rows, dateHeader, includeCobrosDetails) {
   const headers = ['Proyecto', 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader, 'Follow Ups', 'Transcripción'];
   const values = rows.map((row) => [row.project, row.client, row.calledAt, row.status, row.duration, row.commitment, row.followUps, row.transcription]);
-  if (includeLote) {
+  if (includeCobrosDetails) {
     headers.splice(1, 0, 'Lote');
-    values.forEach((value, index) => value.splice(1, 0, rows[index].lote || '—'));
+    headers.splice(7, 0, 'Creado por');
+    values.forEach((value, index) => {
+      value.splice(1, 0, rows[index].lote || '—');
+      value.splice(7, 0, rows[index].campaignCreator || '—');
+    });
   }
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
   worksheet['!cols'] = headers.map((header, index) => ({
@@ -222,7 +227,19 @@ export default function ReportsView() {
         .filter(Boolean),
     );
     const lotsByCallId = new Map();
+    const creatorsByCallId = new Map();
+    const userNamesById = new Map();
     let skip = 0;
+
+    try {
+      const usersResponse = await apiFetch('/api/v1/auth/users', { token: authToken, onUnauthorized: logout });
+      if (usersResponse.ok) {
+        const users = await usersResponse.json();
+        users.forEach((user) => userNamesById.set(String(user.id), user.full_name || user.username || `Usuario #${user.id}`));
+      }
+    } catch (error) {
+      console.warn('No se pudo obtener el creador de las campañas', error);
+    }
 
     // Reportes se alimenta de llamadas, que pueden pertenecer a campañas
     // creadas antes del rango consultado. Por eso no se filtra por fecha de
@@ -254,6 +271,9 @@ export default function ReportsView() {
               const currentLots = lotsByCallId.get(callId) || [];
               if (!currentLots.includes(contact.lote)) lotsByCallId.set(callId, [...currentLots, contact.lote]);
             }
+            if (callId && callIds.has(callId)) {
+              creatorsByCallId.set(callId, userNamesById.get(String(campaign.user_id)) || `Usuario #${campaign.user_id}`);
+            }
           });
         } catch (error) {
           // Un fallo de una campaña nunca debe impedir visualizar el reporte.
@@ -265,7 +285,7 @@ export default function ReportsView() {
       skip += campaigns.length;
     }
 
-    return lotsByCallId;
+    return { lotsByCallId, creatorsByCallId };
   }, [authToken, logout, scope.areaId]);
 
   const fetchFollowUps = useCallback(async () => {
@@ -301,10 +321,11 @@ export default function ReportsView() {
     setLoading(true); setError('');
     try {
       const loadedCalls = await fetchAll();
-      const lotsByCallId = await fetchCobrosLots(loadedCalls);
+      const { lotsByCallId, creatorsByCallId } = await fetchCobrosLots(loadedCalls);
       setCalls(loadedCalls.map((call) => ({
         ...call,
         lote: call.lote || lotsByCallId.get(String(call.id ?? ''))?.join(', ') || null,
+        campaign_creator: creatorsByCallId.get(String(call.id ?? '')) || null,
       })));
       setTablePage(1);
     }
@@ -367,7 +388,7 @@ export default function ReportsView() {
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
     </section>
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Proyecto', ...(showLoteColumn ? ['Lote'] : []), 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan={showLoteColumn ? 7 : 6} className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.project}</td>{showLoteColumn && <td className="px-4 py-3">{row.lote || '—'}</td>}<td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td></tr>) : <tr><td colSpan={showLoteColumn ? 7 : 6} className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Proyecto', ...(showLoteColumn ? ['Lote'] : []), 'Cliente', 'Fecha/Hora de Llamada', 'Status de llamada', 'Duración de llamada', dateHeader, ...(showLoteColumn ? ['Creado por'] : [])].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{loading ? <tr><td colSpan={showLoteColumn ? 8 : 6} className="px-4 py-12 text-center text-gray-400">Cargando llamadas...</td></tr> : visibleRows.length ? visibleRows.map((row, index) => <tr key={row.id || index} className="hover:bg-gray-50"><td className="px-4 py-3">{row.project}</td>{showLoteColumn && <td className="px-4 py-3">{row.lote || '—'}</td>}<td className="px-4 py-3 font-medium">{row.client}</td><td className="px-4 py-3 whitespace-nowrap">{row.calledAt}</td><td className="px-4 py-3">{row.status}</td><td className="px-4 py-3 whitespace-nowrap">{row.duration}</td><td className="px-4 py-3">{row.commitment}</td>{showLoteColumn && <td className="px-4 py-3">{row.campaignCreator || '—'}</td>}</tr>) : <tr><td colSpan={showLoteColumn ? 8 : 6} className="px-4 py-12 text-center text-gray-400">No hay llamadas para los filtros seleccionados.</td></tr>}</tbody></table></div>
       {rows.length > TABLE_PAGE_SIZE && <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-gray-600"><span>Página {tablePage} de {totalPages}</span><div className="flex gap-2"><button onClick={() => setTablePage((page) => page - 1)} disabled={tablePage === 1} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Anterior</button><button onClick={() => setTablePage((page) => page + 1)} disabled={tablePage === totalPages} className="px-3 py-1.5 border rounded-lg disabled:opacity-50">Siguiente</button></div></div>}
     </section>
   </div>;
