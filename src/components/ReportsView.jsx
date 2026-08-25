@@ -214,6 +214,44 @@ export default function ReportsView() {
     return all;
   }, [authToken, logout, queryFor]);
 
+  const fetchCobrosLots = useCallback(async (loadedCalls) => {
+    const callIds = new Set(loadedCalls.map((call) => String(call.id ?? '')).filter(Boolean));
+    const lotsByCallId = new Map();
+    let skip = 0;
+
+    // Reportes se alimenta de llamadas, que pueden pertenecer a campañas
+    // creadas antes del rango consultado. Por eso no se filtra por fecha de
+    // creación de campaña al construir el mapa de lotes.
+    while (true) {
+      const params = new URLSearchParams({ skip: String(skip), limit: '100', fecha_inicio: '2000-01-01', fecha_fin: today() });
+      if (scope.areaId != null) params.set('area_id', String(scope.areaId));
+      const campaignsResponse = await apiFetch(`/api/v1/campaigns?${params.toString()}`, { token: authToken, onUnauthorized: logout });
+      if (!campaignsResponse.ok) break;
+
+      const campaigns = await campaignsResponse.json();
+      const cobrosCampaigns = campaigns.filter((campaign) => String(campaign.area_name || '').trim().toLowerCase() === 'cobros');
+
+      for (const campaign of cobrosCampaigns) {
+        const contactsResponse = await apiFetch(`/api/v1/campaigns/contacts_by_campaing/${campaign.id}`, { token: authToken, onUnauthorized: logout });
+        if (!contactsResponse.ok) continue;
+        const payload = await contactsResponse.json();
+        const contacts = payload.contacts || [];
+        contacts.forEach((contact) => {
+          const callId = String(contact.call_id ?? '');
+          if (callId && callIds.has(callId) && contact.lote) {
+            const currentLots = lotsByCallId.get(callId) || [];
+            if (!currentLots.includes(contact.lote)) lotsByCallId.set(callId, [...currentLots, contact.lote]);
+          }
+        });
+      }
+
+      if (campaigns.length < 100) break;
+      skip += campaigns.length;
+    }
+
+    return lotsByCallId;
+  }, [authToken, logout, scope.areaId]);
+
   const fetchFollowUps = useCallback(async () => {
     const all = [];
     const seenIds = new Set();
@@ -245,10 +283,18 @@ export default function ReportsView() {
   const load = useCallback(async () => {
     if (!authToken) return;
     setLoading(true); setError('');
-    try { setCalls(await fetchAll()); setTablePage(1); }
+    try {
+      const loadedCalls = await fetchAll();
+      const lotsByCallId = await fetchCobrosLots(loadedCalls);
+      setCalls(loadedCalls.map((call) => ({
+        ...call,
+        lote: call.lote || lotsByCallId.get(String(call.id ?? ''))?.join(', ') || null,
+      })));
+      setTablePage(1);
+    }
     catch (err) { if (err.message !== 'Unauthorized') setError(err.message || 'No se pudieron cargar las llamadas.'); }
     finally { setLoading(false); }
-  }, [authToken, fetchAll]);
+  }, [authToken, fetchAll, fetchCobrosLots]);
 
   useEffect(() => { load(); }, [load]);
 
