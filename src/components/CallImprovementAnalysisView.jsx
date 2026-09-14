@@ -56,9 +56,9 @@ function textOf(value) {
   return '';
 }
 
-function AnalysisSection({ title, items, tone = 'blue' }) {
+function AnalysisSection({ title, items, tone = 'blue', showEmpty = false }) {
   const values = asList(items).map(textOf).filter(Boolean);
-  if (!values.length) return null;
+  if (!values.length && !showEmpty) return null;
   const tones = {
     blue: 'border-blue-100 bg-blue-50 text-blue-900',
     green: 'border-green-100 bg-green-50 text-green-900',
@@ -67,9 +67,11 @@ function AnalysisSection({ title, items, tone = 'blue' }) {
   return (
     <section className={`rounded-xl border p-4 ${tones[tone]}`}>
       <h4 className="font-semibold text-sm mb-2">{title}</h4>
-      <ul className="list-disc list-inside space-y-1.5 text-sm leading-relaxed">
-        {values.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
-      </ul>
+      {values.length ? (
+        <ul className="list-disc list-inside space-y-1.5 text-sm leading-relaxed">
+          {values.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+        </ul>
+      ) : <div className="min-h-4" />}
     </section>
   );
 }
@@ -207,7 +209,7 @@ export default function CallImprovementAnalysisView() {
 
                 <details className="group rounded-xl border border-gray-100 bg-gray-50"><summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-semibold text-gray-700"><FileText className="w-4 h-4 text-[#053E68]" />Llamadas ({transcripts.length}/10)<span className="ml-auto text-xs font-normal text-gray-400 group-open:hidden">Ver</span><span className="ml-auto hidden text-xs font-normal text-gray-400 group-open:inline">Ocultar</span></summary>{transcripts.length ? <div className="space-y-2 border-t border-gray-100 p-3">{transcripts.map((call, i) => <button key={call?.id ?? i} type="button" onClick={() => setSelectedCall(call)} className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-left text-sm text-gray-600 transition hover:border-[#053E68]/20 hover:bg-[#053E68]/5"><span className="font-medium text-[#053E68]">Llamada {i + 1}</span><span className="truncate text-xs text-gray-400">{call?.created_at ? new Date(call.created_at).toLocaleString('es-GT') : call?.status || 'Sin fecha'}</span></button>)}</div> : <p className="border-t border-gray-100 p-3 text-sm text-gray-400">No hay llamadas disponibles.</p>}</details>
 
-                {COMPLETE_STATUSES.has(status) ? <div className="space-y-3"><AnalysisSection title="Puntos buenos" items={strengths} tone="green" /><AnalysisSection title="Puntos a mejorar" items={improvements} tone="orange" /><AnalysisSection title="Mejoras sugeridas para el prompt" items={promptImprovements} tone="blue" />{!asList(strengths).length && !asList(improvements).length && !asList(promptImprovements).length && <p className="text-sm text-gray-400">El reporte está completado, pero no incluye recomendaciones.</p>}</div> : status === 'failed' || status === 'error' ? <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700"><p className="font-semibold">No se pudo generar el análisis de IA.</p>{report?.error_message && <p className="mt-1 text-xs">{report.error_message}</p>}</div> : <p className="text-sm text-gray-400">{PENDING_STATUSES.has(status) ? 'La IA está preparando el reporte.' : 'Genera el análisis para obtener recomendaciones de la IA.'}</p>}
+                {COMPLETE_STATUSES.has(status) ? <div className="space-y-3"><AnalysisSection title="Puntos buenos" items={strengths} tone="green" /><AnalysisSection title="Puntos a mejorar" items={improvements} tone="orange" showEmpty /><AnalysisSection title="Mejoras sugeridas para el prompt" items={promptImprovements} tone="blue" />{!asList(strengths).length && !asList(improvements).length && !asList(promptImprovements).length && <p className="text-sm text-gray-400">El reporte está completado, pero no incluye recomendaciones.</p>}</div> : status === 'failed' || status === 'error' ? <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700"><p className="font-semibold">No se pudo generar el análisis de IA.</p>{report?.error_message && <p className="mt-1 text-xs">{report.error_message}</p>}</div> : <p className="text-sm text-gray-400">{PENDING_STATUSES.has(status) ? 'La IA está preparando el reporte.' : 'Genera el análisis para obtener recomendaciones de la IA.'}</p>}
               </article>
             );
           })}
