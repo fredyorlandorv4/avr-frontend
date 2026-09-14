@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
+import TranscriptionModal from './TranscriptionModal.jsx';
 
 const POLL_MS = 5000;
 const COMPLETE_STATUSES = new Set(['completed', 'complete', 'done', 'ready', 'success', 'succeeded']);
@@ -27,6 +28,12 @@ function getReport(card) {
 
 function getAgent(card) {
   return card?.agent || card?.agent_data || card;
+}
+
+function getReportResult(report) {
+  if (!report?.result) return {};
+  if (typeof report.result === 'object') return report.result;
+  try { return JSON.parse(report.result); } catch { return {}; }
 }
 
 function statusFor(card) {
@@ -89,6 +96,7 @@ export default function CallImprovementAnalysisView() {
   const [generating, setGenerating] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState(null);
   const [error, setError] = useState('');
+  const [selectedCall, setSelectedCall] = useState(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!authToken) return;
@@ -142,6 +150,11 @@ export default function CallImprovementAnalysisView() {
 
   return (
     <div className="max-w-[1280px] mx-auto space-y-6">
+      <TranscriptionModal
+        show={Boolean(selectedCall)}
+        call={selectedCall}
+        onClose={() => setSelectedCall(null)}
+      />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="w-1 h-9 bg-[#F4CD04] rounded-full" />
@@ -177,9 +190,10 @@ export default function CallImprovementAnalysisView() {
             const status = statusFor(card);
             const transcripts = asList(card?.transcriptions || card?.last_transcriptions || card?.calls || report?.transcriptions).slice(0, 10);
             const prompt = agent?.prompt || card?.prompt || report?.prompt;
-            const strengths = report?.strengths || report?.good_points || report?.puntos_buenos || report?.positive_points;
-            const improvements = report?.areas_for_improvement || report?.improvement_points || report?.puntos_a_mejorar || report?.weaknesses;
-            const promptImprovements = report?.prompt_improvements || report?.prompt_improvement || report?.mejoras_prompt || report?.prompt_suggestions;
+            const result = getReportResult(report);
+            const strengths = result?.strengths || result?.good_points || result?.puntos_buenos || result?.positive_points;
+            const improvements = result?.areas_for_improvement || result?.improvement_points || result?.puntos_a_mejorar || result?.weaknesses;
+            const promptImprovements = result?.prompt_improvements || result?.prompt_improvement || result?.mejoras_prompt || result?.prompt_suggestions;
             return (
               <article key={agentId ?? index} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-5">
                 <header className="flex items-start justify-between gap-3">
@@ -189,11 +203,11 @@ export default function CallImprovementAnalysisView() {
 
                 <div className="flex justify-end"><button onClick={() => requestAnalysis({ agent_ids: [agentId], force: true }, agentId)} disabled={!agentId || regeneratingId === agentId} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#053E68] hover:text-[#06497c] disabled:opacity-50"><RotateCcw className={`w-3.5 h-3.5 ${regeneratingId === agentId ? 'animate-spin' : ''}`} /> Regenerar</button></div>
 
-                {prompt && <section><h4 className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2"><FileText className="w-4 h-4 text-[#053E68]" /> Prompt utilizado</h4><pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-gray-50 p-3 text-xs leading-relaxed text-gray-600">{prompt}</pre></section>}
+                {prompt && <details className="group rounded-xl border border-gray-100 bg-gray-50"><summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-semibold text-gray-700"><FileText className="w-4 h-4 text-[#053E68]" />Prompt utilizado<span className="ml-auto text-xs font-normal text-gray-400 group-open:hidden">Ver</span><span className="ml-auto hidden text-xs font-normal text-gray-400 group-open:inline">Ocultar</span></summary><pre className="max-h-64 overflow-y-auto border-t border-gray-100 px-3 py-3 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-600">{prompt}</pre></details>}
 
-                <section><h4 className="text-sm font-semibold text-gray-700 mb-2">Últimas transcripciones ({transcripts.length}/10)</h4>{transcripts.length ? <div className="space-y-2">{transcripts.map((transcript, i) => <details key={transcript?.id ?? i} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"><summary className="cursor-pointer text-sm text-gray-600">Llamada {i + 1}{transcript?.created_at ? ` · ${new Date(transcript.created_at).toLocaleString('es-GT')}` : ''}</summary><p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-600">{textOf(transcript) || 'Transcripción no disponible.'}</p></details>)}</div> : <p className="text-sm text-gray-400">No hay transcripciones disponibles.</p>}</section>
+                <details className="group rounded-xl border border-gray-100 bg-gray-50"><summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-semibold text-gray-700"><FileText className="w-4 h-4 text-[#053E68]" />Llamadas ({transcripts.length}/10)<span className="ml-auto text-xs font-normal text-gray-400 group-open:hidden">Ver</span><span className="ml-auto hidden text-xs font-normal text-gray-400 group-open:inline">Ocultar</span></summary>{transcripts.length ? <div className="space-y-2 border-t border-gray-100 p-3">{transcripts.map((call, i) => <button key={call?.id ?? i} type="button" onClick={() => setSelectedCall(call)} className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2.5 text-left text-sm text-gray-600 transition hover:border-[#053E68]/20 hover:bg-[#053E68]/5"><span className="font-medium text-[#053E68]">Llamada {i + 1}</span><span className="truncate text-xs text-gray-400">{call?.created_at ? new Date(call.created_at).toLocaleString('es-GT') : call?.status || 'Sin fecha'}</span></button>)}</div> : <p className="border-t border-gray-100 p-3 text-sm text-gray-400">No hay llamadas disponibles.</p>}</details>
 
-                {COMPLETE_STATUSES.has(status) ? <div className="space-y-3"><AnalysisSection title="Puntos buenos" items={strengths} tone="green" /><AnalysisSection title="Puntos a mejorar" items={improvements} tone="orange" /><AnalysisSection title="Mejoras sugeridas para el prompt" items={promptImprovements} tone="blue" />{!asList(strengths).length && !asList(improvements).length && !asList(promptImprovements).length && <p className="text-sm text-gray-400">El reporte está completado, pero no incluye recomendaciones.</p>}</div> : <p className="text-sm text-gray-400">{PENDING_STATUSES.has(status) ? 'La IA está preparando el reporte.' : 'Genera el análisis para obtener recomendaciones de la IA.'}</p>}
+                {COMPLETE_STATUSES.has(status) ? <div className="space-y-3"><AnalysisSection title="Puntos buenos" items={strengths} tone="green" /><AnalysisSection title="Puntos a mejorar" items={improvements} tone="orange" /><AnalysisSection title="Mejoras sugeridas para el prompt" items={promptImprovements} tone="blue" />{!asList(strengths).length && !asList(improvements).length && !asList(promptImprovements).length && <p className="text-sm text-gray-400">El reporte está completado, pero no incluye recomendaciones.</p>}</div> : status === 'failed' || status === 'error' ? <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700"><p className="font-semibold">No se pudo generar el análisis de IA.</p>{report?.error_message && <p className="mt-1 text-xs">{report.error_message}</p>}</div> : <p className="text-sm text-gray-400">{PENDING_STATUSES.has(status) ? 'La IA está preparando el reporte.' : 'Genera el análisis para obtener recomendaciones de la IA.'}</p>}
               </article>
             );
           })}
