@@ -18,7 +18,7 @@ function asList(value) {
 
 function getCards(payload) {
   if (Array.isArray(payload)) return payload;
-  return payload?.items || payload?.agents || payload?.results || payload?.data || [];
+  return payload?.cards || payload?.items || payload?.agents || payload?.results || payload?.data || [];
 }
 
 function getReport(card) {
