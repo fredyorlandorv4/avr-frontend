@@ -13,6 +13,7 @@ import TranscriptionModal from './components/TranscriptionModal.jsx';
 import AnalysisModal from './components/AnalysisModal.jsx';
 import DashboardView from './components/DashboardView.jsx';
 import CallsMonitorView from './components/CallsMonitorView.jsx';
+import CallImprovementAnalysisView from './components/CallImprovementAnalysisView.jsx';
 import ReportsView from './components/ReportsView.jsx';
 import CampaignListView from './components/CampaignListView.jsx';
 import CreateCampaignView from './components/CreateCampaignView.jsx';
@@ -27,6 +28,7 @@ import SettingsView from './components/SettingsView.jsx';
 const PATH_LABELS = {
   '/dashboard':     'Dashboard',
   '/calls':         'Monitor de Llamadas',
+  '/call-analysis': 'Análisis de llamadas',
   '/reports':       'Reportes',
   '/campaigns':     'Campañas',
   '/campaigns/new': 'Nueva Campaña',
@@ -540,6 +542,8 @@ function AppShell() {
               onViewAnalysis={openAnalysis}
             />
           } />
+
+          <Route path="/call-analysis" element={<CallImprovementAnalysisView />} />
 
           <Route path="/reports" element={<ReportsView />} />
 

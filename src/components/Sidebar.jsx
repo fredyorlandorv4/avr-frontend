@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText } from 'lucide-react';
+import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_ONLY = new Set(['prompts', 'users', 'settings']);
@@ -9,6 +9,7 @@ const TELEMARKETING_HIDDEN = new Set(['projects']);
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard',           path: '/dashboard', Icon: Activity  },
   { id: 'calls',     label: 'Monitor de Llamadas', path: '/calls',     Icon: Phone     },
+  { id: 'call-analysis', label: 'Análisis de llamadas', path: '/call-analysis', Icon: Sparkles },
   { id: 'reports',   label: 'Reportes',            path: '/reports',   Icon: BarChart3 },
   { id: 'campaigns', label: 'Campañas',            path: '/campaigns', Icon: Target    },
   { id: 'followups', label: 'Follow Ups',          path: '/followups', Icon: Clock     },
