@@ -24,6 +24,7 @@ import PromptsView from './components/PromptsView.jsx';
 import AgentEditor from './components/AgentEditor.jsx';
 import UsersView from './components/UsersView.jsx';
 import SettingsView from './components/SettingsView.jsx';
+import AgentCallTestsView from './components/AgentCallTestsView.jsx';
 
 const PATH_LABELS = {
   '/dashboard':     'Dashboard',
@@ -38,6 +39,7 @@ const PATH_LABELS = {
   '/prompts/new':   'Nuevo Agente',
   '/users':         'Usuarios',
   '/settings':      'Configuración',
+  '/agent-call-tests': 'Pruebas de Agentes',
 };
 
 // ─── Helpers de fecha (rango por defecto de los filtros) ─────────────────────
@@ -620,6 +622,10 @@ function AppShell() {
 
           <Route path="/settings" element={
             isAdmin ? <SettingsView /> : <Navigate to="/dashboard" replace />
+          } />
+
+          <Route path="/agent-call-tests" element={
+            isAdmin ? <AgentCallTestsView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

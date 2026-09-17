@@ -2,13 +2,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Check, ArrowLeft, Plus, Braces } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
+import {
+  VOICE_PROVIDERS, initialVoiceFields, validateVoiceFields, voiceModelLabel,
+  voicePayload, fieldErrorsFromApi,
+} from '../utils/agentVoice.js';
 
 // Sin ancho: cada uso decide el suyo (w-full en los campos normales, w-16 en el número).
 const baseInputCls =
   'px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-base transition disabled:bg-gray-100 disabled:cursor-not-allowed';
 const inputCls = `w-full ${baseInputCls}`;
 
-const EMPTY_AGENT = { nombre: '', agent_id: '', prompt: '', area_id: '', subarea: '', nota: '', status: true };
+const EMPTY_AGENT = {
+  nombre: '', agent_id: '', voice_provider: VOICE_PROVIDERS.ELEVENLABS,
+  voice_model: null, prompt: '', area_id: '', subarea: '', nota: '', status: true,
+};
 
 // El prompt vive en dos formatos:
 //   - En el editor, numerado:  "Hola {{1}}, tu saldo es {{2}}"
@@ -75,6 +82,7 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
   const [form, setForm]     = useState(EMPTY_AGENT);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [areaSubareas, setAreaSubareas]       = useState([]);   // subáreas del área elegida
   const [loadingSubareas, setLoadingSubareas] = useState(false);
 
@@ -156,7 +164,7 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
 
     setForm({
       nombre:   agent.nombre || '',
-      agent_id: agent.agent_id || '',
+      ...initialVoiceFields(agent),
       prompt,
       area_id:  parent ? String(parent.id) : '',
       subarea:  subUuid,
@@ -179,7 +187,21 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
     );
   }, [form.prompt]);
 
-  const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setField = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setFieldErrors((errors) => ({ ...errors, [k]: undefined }));
+  };
+
+  const onVoiceProviderChange = (voice_provider) => {
+    setForm((f) => ({
+      ...f,
+      voice_provider,
+      // Nunca reutilizar o transmitir el Agent ID de ElevenLabs con OpenAI Live.
+      agent_id: '',
+      voice_model: voice_provider === VOICE_PROVIDERS.OPENAI_LIVE ? 'gpt-live-1' : null,
+    }));
+    setFieldErrors((errors) => ({ ...errors, agent_id: undefined, voice_provider: undefined }));
+  };
 
   // Al cambiar el área: reinicia la subárea y, si el área tiene subáreas, las carga.
   const onAreaChange = (value) => {
@@ -211,8 +233,10 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
 
   const handleSave = async () => {
     setError('');
+    setFieldErrors({});
     if (!form.nombre.trim())   { setError('El nombre es obligatorio.'); return; }
-    if (!form.agent_id.trim()) { setError('El agent_id es obligatorio.'); return; }
+    const voiceErrors = validateVoiceFields(form);
+    if (Object.keys(voiceErrors).length) { setFieldErrors(voiceErrors); return; }
     if (!form.prompt.trim())   { setError('El prompt es obligatorio.'); return; }
     if (!form.area_id)         { setError('Selecciona un área.'); return; }
     if (needsSubarea && !form.subarea) { setError('Selecciona una subárea.'); return; }
@@ -233,7 +257,7 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
     // area_uuid = uuid de la subárea si el área tiene subáreas; si no, uuid del área.
     const body = {
       nombre:    form.nombre.trim(),
-      agent_id:  form.agent_id.trim(),
+      ...voicePayload(form),
       prompt:    toStoredPrompt(form.prompt, variables).trim(),
       area_uuid: needsSubarea ? form.subarea : (selectedArea?.uuid || ''),
       nota:      form.nota.trim() || null,
@@ -250,7 +274,9 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
       if (res.ok) {
         onSaved();
       } else {
-        setError(data.detail || 'Error al guardar el agente.');
+        const apiFieldErrors = fieldErrorsFromApi(data.detail);
+        if (Object.keys(apiFieldErrors).length) setFieldErrors(apiFieldErrors);
+        setError(typeof data.detail === 'string' ? data.detail : 'Revisa los campos marcados para corregir los errores.');
       }
     } catch (err) {
       if (err.message !== 'Unauthorized') setError('Error de conexión. Verifica que la API esté corriendo.');
@@ -324,15 +350,28 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre *</label>
             <input className={inputCls} value={form.nombre} disabled={saving} maxLength={15}
               onChange={(e) => setField('nombre', e.target.value)} placeholder="Ej: Karina" />
+            {fieldErrors.nombre && <p className="text-xs text-red-600 mt-1.5">{fieldErrors.nombre}</p>}
             <p className="text-xs text-gray-400 mt-1.5">Máximo 15 caracteres.</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Agent ID *</label>
-            <input className={inputCls} value={form.agent_id} disabled={saving} maxLength={50}
-              autoComplete="off"
-              onChange={(e) => setField('agent_id', e.target.value)} placeholder="Ej: agent_cobros_01" />
-            <p className="text-xs text-gray-400 mt-1.5">Identificador único, máximo 50 caracteres.</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Proveedor de voz *</label>
+            <select className={inputCls} value={form.voice_provider} disabled={saving}
+              onChange={(e) => onVoiceProviderChange(e.target.value)}>
+              <option value={VOICE_PROVIDERS.ELEVENLABS}>ElevenLabs</option>
+              <option value={VOICE_PROVIDERS.OPENAI_LIVE}>OpenAI Live</option>
+            </select>
+            {fieldErrors.voice_provider && <p className="text-xs text-red-600 mt-1.5">{fieldErrors.voice_provider}</p>}
+            <label className="block text-sm font-medium text-gray-700 mt-4 mb-1.5">Modelo</label>
+            <input className={`${inputCls} bg-gray-50 text-gray-600`} value={voiceModelLabel(form.voice_provider)} readOnly disabled={saving} />
+            {fieldErrors.voice_model && <p className="text-xs text-red-600 mt-1.5">{fieldErrors.voice_model}</p>}
+            {form.voice_provider === VOICE_PROVIDERS.ELEVENLABS && <>
+              <label className="block text-sm font-medium text-gray-700 mt-4 mb-1.5">Agent ID de ElevenLabs *</label>
+              <input className={`${inputCls} ${fieldErrors.agent_id ? 'border-red-400 focus:border-red-500' : ''}`}
+                value={form.agent_id} disabled={saving} maxLength={50} autoComplete="off"
+                onChange={(e) => setField('agent_id', e.target.value)} placeholder="Ej: agent_cobros_01" />
+              {fieldErrors.agent_id && <p className="text-xs text-red-600 mt-1.5">{fieldErrors.agent_id}</p>}
+            </>}
           </div>
         </div>
 
@@ -345,6 +384,7 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
               <option value="">-- Selecciona un área --</option>
               {areas.map((a) => <option key={a.id} value={a.id}>{a.area}</option>)}
             </select>
+            {fieldErrors.area_uuid && <p className="text-xs text-red-600 mt-1.5">{fieldErrors.area_uuid}</p>}
           </div>
 
           {/* Si el área tiene subáreas, hay que elegir una de ellas. */}
@@ -427,6 +467,8 @@ export default function AgentEditor({ agentId, onSaved, onCancel }) {
               placeholder="Instrucciones del agente de voz..."
             />
           </div>
+
+          {fieldErrors.prompt && <p className="text-xs text-red-600 mt-1.5">{fieldErrors.prompt}</p>}
 
           <p className="text-xs text-gray-400 mt-1.5">
             {form.prompt.length} caracteres. Sin límite de longitud.

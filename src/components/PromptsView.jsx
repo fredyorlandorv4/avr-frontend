@@ -5,6 +5,7 @@ import { RefreshCw, FileText, Plus, Pencil, Trash2, Eye, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 import { TableSkeleton } from './Skeleton.jsx';
+import { normalizeVoiceProvider, VOICE_PROVIDERS } from '../utils/agentVoice.js';
 
 // Resalta los {{...}} del prompt guardado para distinguirlos del texto.
 function highlightVars(text) {
@@ -12,6 +13,17 @@ function highlightVars(text) {
     /^\{\{[^{}]+\}\}$/.test(chunk)
       ? <mark key={i} className="bg-[#F4CD04]/40 text-[#053E68] font-semibold rounded px-1 py-0.5">{chunk}</mark>
       : <span key={i}>{chunk}</span>
+  );
+}
+
+function VoiceProviderBadge({ agent }) {
+  const isOpenAi = normalizeVoiceProvider(agent.voice_provider) === VOICE_PROVIDERS.OPENAI_LIVE;
+  return (
+    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${
+      isOpenAi ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'
+    }`}>
+      {isOpenAi ? 'OpenAI Live · GPT-Live-1' : 'ElevenLabs'}
+    </span>
   );
 }
 
@@ -126,6 +138,7 @@ export default function PromptsView() {
                   <th className="px-4 py-3">#</th>
                   <th className="px-4 py-3">Nombre</th>
                   <th className="px-4 py-3">Agent ID</th>
+                  <th className="px-4 py-3">Voz</th>
                   <th className="px-4 py-3">Área</th>
                   <th className="px-4 py-3">Nota</th>
                   <th className="px-4 py-3">Estado</th>
@@ -138,8 +151,11 @@ export default function PromptsView() {
                     <td className="px-4 py-3 text-gray-400">{i + 1}</td>
                     <td className="px-4 py-3 font-medium text-[#053E68]">{a.nombre}</td>
                     <td className="px-4 py-3">
-                      <code className="text-xs bg-[#053E68]/5 text-[#053E68] px-2 py-0.5 rounded font-mono">{a.agent_id}</code>
+                      {normalizeVoiceProvider(a.voice_provider) === VOICE_PROVIDERS.OPENAI_LIVE
+                        ? <span className="text-gray-400">—</span>
+                        : <code className="text-xs bg-[#053E68]/5 text-[#053E68] px-2 py-0.5 rounded font-mono">{a.agent_id}</code>}
                     </td>
+                    <td className="px-4 py-3"><VoiceProviderBadge agent={a} /></td>
                     <td className="px-4 py-3 text-gray-600 capitalize">{a.area || '—'}</td>
                     <td className="px-4 py-3 text-gray-600 max-w-xs truncate" title={a.nota || ''}>{a.nota || '—'}</td>
                     <td className="px-4 py-3">
@@ -199,6 +215,7 @@ export default function PromptsView() {
                 <span className="w-1 h-9 bg-[#F4CD04] rounded-full shrink-0" />
                 <div className="min-w-0">
                   <h3 className="text-xl font-bold text-[#053E68] truncate">{viewing.nombre}</h3>
+                  <div className="mt-2"><VoiceProviderBadge agent={viewing} /></div>
                   <p className="text-sm text-gray-400 mt-0.5 truncate">
                     <code className="font-mono">{viewing.agent_id}</code>
                     {viewing.area ? <span className="capitalize"> · {viewing.area}</span> : null}

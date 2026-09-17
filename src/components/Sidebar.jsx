@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom';
-import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles } from 'lucide-react';
+import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles, FlaskConical } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const ADMIN_ONLY = new Set(['prompts', 'users', 'settings']);
+const ADMIN_ONLY = new Set(['prompts', 'agent-call-tests', 'users', 'settings']);
 // El área de marketing (telemarketing) no accede a proyectos.
 const TELEMARKETING_HIDDEN = new Set(['projects']);
 
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { id: 'followups', label: 'Follow Ups',          path: '/followups', Icon: Clock     },
   { id: 'projects',  label: 'Proyectos',           path: '/projects',  Icon: Briefcase },
   { id: 'prompts',   label: 'Prompts',             path: '/prompts',   Icon: FileText  },
+  { id: 'agent-call-tests', label: 'Pruebas de Agentes', path: '/agent-call-tests', Icon: FlaskConical },
   { id: 'users',     label: 'Usuarios',            path: '/users',     Icon: Users     },
   { id: 'settings',  label: 'Configuración',       path: '/settings',  Icon: Settings  },
 ];
