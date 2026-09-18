@@ -1,7 +1,31 @@
 import { X, RefreshCw } from 'lucide-react';
 
+function getTranscriptionText(transcription) {
+  if (transcription == null) return '';
+  if (typeof transcription === 'string') return transcription;
+  if (typeof transcription === 'number' || typeof transcription === 'boolean') return String(transcription);
+  if (Array.isArray(transcription)) {
+    return transcription
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          return item.text ?? item.content ?? JSON.stringify(item);
+        }
+        return String(item ?? '');
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (typeof transcription === 'object') {
+    return transcription.text ?? transcription.content ?? JSON.stringify(transcription, null, 2);
+  }
+  return '';
+}
+
 export default function TranscriptionModal({ show, call, onClose }) {
   if (!show || !call) return null;
+
+  const transcriptionText = getTranscriptionText(call.transcription);
 
   return (
     <div
@@ -22,9 +46,9 @@ export default function TranscriptionModal({ show, call, onClose }) {
           </button>
         </div>
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
-          {call.transcription ? (
+          {transcriptionText ? (
             <div className="prose max-w-none">
-              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{call.transcription}</p>
+              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{transcriptionText}</p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">

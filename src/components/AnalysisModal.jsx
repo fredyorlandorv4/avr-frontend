@@ -1,9 +1,47 @@
 import { X, RefreshCw } from 'lucide-react';
 
+function toText(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((item) => toText(item)).filter(Boolean).join('\n');
+  if (typeof value === 'object') {
+    if (typeof value.text === 'string') return value.text;
+    if (typeof value.content === 'string') return value.content;
+    return JSON.stringify(value, null, 2);
+  }
+  return '';
+}
+
+function toList(value) {
+  if (Array.isArray(value)) return value.map((item) => toText(item)).filter(Boolean);
+  const text = toText(value);
+  return text ? [text] : [];
+}
+
+function normalizeAnalysis(rawAnalysis) {
+  if (!rawAnalysis) return null;
+  if (typeof rawAnalysis === 'string') {
+    try {
+      const parsed = JSON.parse(rawAnalysis);
+      return parsed && typeof parsed === 'object' ? parsed : { summary: rawAnalysis };
+    } catch {
+      return { summary: rawAnalysis };
+    }
+  }
+  return typeof rawAnalysis === 'object' ? rawAnalysis : { summary: toText(rawAnalysis) };
+}
+
 export default function AnalysisModal({ show, call, onClose }) {
   if (!show || !call) return null;
 
-  const analysis = call.analysis;
+  const analysis = normalizeAnalysis(call.analysis);
+  const sentimentText = toText(analysis?.sentiment).toLowerCase();
+  const mainPoints = toList(analysis?.main_points);
+  const actionItems = toList(analysis?.action_items);
+  const followUpItems = toList(analysis?.follow_up);
+  const coachingStrengths = toList(analysis?.supervisor_coaching?.strengths);
+  const coachingAreas = toList(analysis?.supervisor_coaching?.areas_for_improvement);
 
   return (
     <div
@@ -29,57 +67,57 @@ export default function AnalysisModal({ show, call, onClose }) {
               {analysis.title && (
                 <div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">Título</h4>
-                  <p className="text-gray-700">{analysis.title}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{toText(analysis.title)}</p>
                 </div>
               )}
 
               {analysis.summary && (
                 <div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">Resumen</h4>
-                  <p className="text-gray-700">{analysis.summary}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{toText(analysis.summary)}</p>
                 </div>
               )}
 
-              {analysis.sentiment && (
+              {toText(analysis.sentiment) && (
                 <div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">Sentimiento</h4>
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    analysis.sentiment.includes('positivo') ? 'bg-green-100 text-green-800' :
-                    analysis.sentiment.includes('negativo') ? 'bg-red-100 text-red-800' :
+                    sentimentText.includes('positivo') ? 'bg-green-100 text-green-800' :
+                    sentimentText.includes('negativo') ? 'bg-red-100 text-red-800' :
                     'bg-yellow-100 text-yellow-800'
                   }`}>
-                    {analysis.sentiment}
+                    {toText(analysis.sentiment)}
                   </span>
                 </div>
               )}
 
-              {analysis.main_points && analysis.main_points.length > 0 && (
+              {mainPoints.length > 0 && (
                 <div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">Puntos Principales</h4>
                   <ul className="list-disc list-inside space-y-2">
-                    {analysis.main_points.map((point, index) => (
+                    {mainPoints.map((point, index) => (
                       <li key={index} className="text-gray-700">{point}</li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {analysis.action_items && analysis.action_items.length > 0 && (
+              {actionItems.length > 0 && (
                 <div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">Acciones a Realizar</h4>
                   <ul className="list-disc list-inside space-y-2">
-                    {analysis.action_items.map((item, index) => (
+                    {actionItems.map((item, index) => (
                       <li key={index} className="text-gray-700">{item}</li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {analysis.follow_up && analysis.follow_up.length > 0 && (
+              {followUpItems.length > 0 && (
                 <div>
                   <h4 className="text-lg font-semibold text-gray-800 mb-2">Seguimiento</h4>
                   <ul className="list-disc list-inside space-y-2">
-                    {analysis.follow_up.map((item, index) => (
+                    {followUpItems.map((item, index) => (
                       <li key={index} className="text-gray-700">{item}</li>
                     ))}
                   </ul>
@@ -102,22 +140,22 @@ export default function AnalysisModal({ show, call, onClose }) {
                     </div>
                   )}
 
-                  {analysis.supervisor_coaching.strengths && analysis.supervisor_coaching.strengths.length > 0 && (
+                  {coachingStrengths.length > 0 && (
                     <div className="mb-4">
                       <h5 className="font-medium text-green-700 mb-2">Fortalezas</h5>
                       <ul className="list-disc list-inside space-y-1">
-                        {analysis.supervisor_coaching.strengths.map((item, index) => (
+                        {coachingStrengths.map((item, index) => (
                           <li key={index} className="text-gray-700 text-sm">{item}</li>
                         ))}
                       </ul>
                     </div>
                   )}
 
-                  {analysis.supervisor_coaching.areas_for_improvement && analysis.supervisor_coaching.areas_for_improvement.length > 0 && (
+                  {coachingAreas.length > 0 && (
                     <div className="mb-4">
                       <h5 className="font-medium text-orange-700 mb-2">Áreas de Mejora</h5>
                       <ul className="list-disc list-inside space-y-1">
-                        {analysis.supervisor_coaching.areas_for_improvement.map((item, index) => (
+                        {coachingAreas.map((item, index) => (
                           <li key={index} className="text-gray-700 text-sm">{item}</li>
                         ))}
                       </ul>
