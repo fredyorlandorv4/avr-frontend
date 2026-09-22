@@ -322,6 +322,59 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
 
   const refresh = useCallback(() => { load(1, { append: false }); }, [load]);
 
+  const [exportingAnalysis, setExportingAnalysis] = useState(false);
+
+  const handleDownloadAnalysis = useCallback(async () => {
+    if (!authToken || exportingAnalysis) return;
+
+    setExportingAnalysis(true);
+    try {
+      const exportedCalls = [];
+      let pageNumber = 1;
+      let rawCount = 0;
+      let matchingTotal = Number.POSITIVE_INFINITY;
+
+      while (rawCount < matchingTotal) {
+        const res = await apiFetch(`/api/v1/calls/admin/all?${buildQuery(pageNumber)}`, {
+          token: authToken,
+          onUnauthorized: logout,
+        });
+        if (!res.ok) throw new Error('No se pudieron obtener las llamadas para la descarga');
+
+        const data = await res.json();
+        const incoming = Array.isArray(data.items) ? data.items : [];
+        matchingTotal = Number(data.total ?? incoming.length);
+        rawCount += incoming.length;
+
+        const visibleCalls = filterStatus === VOICEMAIL_STATUS
+          ? incoming.filter((call) => getEffectiveStatus(call) === VOICEMAIL_STATUS)
+          : incoming;
+        exportedCalls.push(...visibleCalls.map((call) => ({
+          id: call.id ?? call.call_id ?? null,
+          cliente: call.client_name ?? call.client?.name ?? null,
+          agente: call.agent_name ?? call.user_name ?? call.agent?.name ?? call.user?.name ?? null,
+          transcripcion: call.transcription ?? null,
+          analisis: call.analysis ?? null,
+        })));
+
+        if (incoming.length === 0) break;
+        pageNumber += 1;
+      }
+
+      const blob = new Blob([JSON.stringify(exportedCalls, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `analisis_llamadas_${todayStr()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err.message !== 'Unauthorized') setLoadError(err.message || 'No se pudo descargar el análisis');
+    } finally {
+      setExportingAnalysis(false);
+    }
+  }, [authToken, buildQuery, exportingAnalysis, filterStatus, logout]);
+
   // ── Audio player ──────────────────────────────────────────
   const [audioLoading,  setAudioLoading]  = useState({});
   const [audioError,    setAudioError]    = useState({});
@@ -380,6 +433,17 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <AreaFilter />
+            <button
+              onClick={handleDownloadAnalysis}
+              disabled={loading || exportingAnalysis || total === 0}
+              className="flex items-center justify-center gap-2 px-4 py-2 border border-[#053E68] text-[#053E68] rounded-lg hover:bg-[#053E68]/5 transition font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {exportingAnalysis
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Download className="w-4 h-4" />
+              }
+              Descargar Análisis
+            </button>
             <button
               onClick={refresh}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] transition font-medium text-sm"
