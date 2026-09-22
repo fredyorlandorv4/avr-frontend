@@ -329,6 +329,18 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
 
     setExportingAnalysis(true);
     try {
+      const agentNamesById = new Map();
+      const usersResponse = await apiFetch('/api/v1/auth/users', {
+        token: authToken,
+        onUnauthorized: logout,
+      });
+      if (usersResponse.ok) {
+        const users = await usersResponse.json();
+        (Array.isArray(users) ? users : []).forEach((user) => {
+          agentNamesById.set(String(user.id), user.full_name || user.username || `Usuario #${user.id}`);
+        });
+      }
+
       const exportedCalls = [];
       let pageNumber = 1;
       let rawCount = 0;
@@ -352,7 +364,9 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
         exportedCalls.push(...visibleCalls.map((call) => ({
           id: call.id ?? call.call_id ?? null,
           cliente: call.client_name ?? call.client?.name ?? null,
-          agente: call.agent_name ?? call.user_name ?? call.agent?.name ?? call.user?.name ?? null,
+          agente: call.agent_name ?? call.agentName ?? call.user_name ?? call.userName ??
+            call.agent?.name ?? call.user?.name ??
+            agentNamesById.get(String(call.agent_id ?? call.agentId ?? call.user_id ?? call.userId ?? '')) ?? null,
           transcripcion: call.transcription ?? null,
           analisis: call.analysis ?? null,
         })));
