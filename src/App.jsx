@@ -25,12 +25,14 @@ import AgentEditor from './components/AgentEditor.jsx';
 import UsersView from './components/UsersView.jsx';
 import SettingsView from './components/SettingsView.jsx';
 import AgentCallTestsView from './components/AgentCallTestsView.jsx';
+import OverduePortfolioView from './components/OverduePortfolioView.jsx';
 
 const PATH_LABELS = {
   '/dashboard':     'Dashboard',
   '/calls':         'Monitor de Llamadas',
   '/call-analysis': 'Análisis de llamadas',
   '/reports':       'Reportes',
+  '/consulta-sap': 'Consulta SAP',
   '/campaigns':     'Campañas',
   '/campaigns/new': 'Nueva Campaña',
   '/followups':     'Follow Ups',
@@ -240,7 +242,7 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
 // ─── App shell (holds shared state + data loaders, defines routes) ────────────
 
 function AppShell() {
-  const { authToken, isLoggedIn, logout, isAdmin, isSystem, areaName } = useAuth();
+  const { authToken, isLoggedIn, logout, isAdmin, isSystem, areaName, role } = useAuth();
   const { areas, scope } = useArea();
 
   // Restricciones del área de marketing (telemarketing): no crea campañas
@@ -548,6 +550,10 @@ function AppShell() {
           <Route path="/call-analysis" element={<CallImprovementAnalysisView />} />
 
           <Route path="/reports" element={<ReportsView />} />
+
+          <Route path="/consulta-sap" element={
+            ['admin', 'supervisor'].includes(role) ? <OverduePortfolioView /> : <Navigate to="/dashboard" replace />
+          } />
 
           <Route path="/campaigns" element={
             <CampaignListView

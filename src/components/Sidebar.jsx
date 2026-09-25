@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles, FlaskConical } from 'lucide-react';
+import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles, FlaskConical, WalletCards } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_ONLY = new Set(['prompts', 'agent-call-tests', 'users', 'settings']);
+const ADMIN_OR_SUPERVISOR = new Set(['overdue-portfolio']);
 // El área de marketing (telemarketing) no accede a proyectos.
 const TELEMARKETING_HIDDEN = new Set(['projects']);
 
@@ -11,6 +12,7 @@ const NAV_ITEMS = [
   { id: 'calls',     label: 'Monitor de Llamadas', path: '/calls',     Icon: Phone     },
   { id: 'call-analysis', label: 'Análisis de llamadas', path: '/call-analysis', Icon: Sparkles },
   { id: 'reports',   label: 'Reportes',            path: '/reports',   Icon: BarChart3 },
+  { id: 'overdue-portfolio', label: 'Consulta SAP', path: '/consulta-sap', Icon: WalletCards },
   { id: 'campaigns', label: 'Campañas',            path: '/campaigns', Icon: Target    },
   { id: 'followups', label: 'Follow Ups',          path: '/followups', Icon: Clock     },
   { id: 'projects',  label: 'Proyectos',           path: '/projects',  Icon: Briefcase },
@@ -31,6 +33,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
 
   const visibleItems = NAV_ITEMS.filter(({ id }) => {
     if (ADMIN_ONLY.has(id) && !isAdmin) return false;
+    if (ADMIN_OR_SUPERVISOR.has(id) && !['admin', 'supervisor'].includes(role)) return false;
     if (isTelemarketing && TELEMARKETING_HIDDEN.has(id)) return false;
     return true;
   });
