@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, Loader2, PhoneCall, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, MessageCircle, PhoneCall, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 
@@ -10,6 +10,7 @@ const STATUS_LABELS = {
   completed: 'Completada', failed: 'Fallida', busy: 'Ocupado', no_answer: 'Sin respuesta',
   cancelled: 'Cancelada', queue_failed: 'Error al encolar',
 };
+const listFrom = value => Array.isArray(value) ? value : (value?.items || value?.results || value?.data || []);
 
 const inputCls = 'w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-sm transition disabled:bg-gray-100';
 
@@ -77,7 +78,86 @@ function DynamicField({ field, value, onChange, disabled, error }) {
     <label className="block text-sm font-medium text-gray-700 mb-1.5">{field.label}{field.required ? ' *' : ''}</label>
     <input className={`${inputCls} ${error ? 'border-red-400' : ''}`} type={type} step={field.input_type === 'money' ? '0.01' : field.input_type === 'number' ? '1' : undefined} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
     {error ? <p className="text-xs text-red-600 mt-1.5">{error}</p> : field.description && <p className="text-xs text-gray-400 mt-1.5">{field.description}</p>}
+    {carmenFlipped && <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"><section className="w-full max-w-md animate-[pulse_0.35s_ease-out] rounded-2xl border border-[#0B5A8E]/20 bg-gradient-to-br from-[#053E68] to-[#0B5A8E] p-7 text-white shadow-2xl"><MessageCircle className="mb-4 h-10 w-10 text-[#F4CD04]" /><p className="text-sm text-blue-100">Recordatorios por WhatsApp</p><h3 className="mt-1 text-xl font-bold">Prueba a Carmen</h3><p className="mt-2 text-sm text-blue-100">Genera y revisa un recordatorio ficticio antes de enviarlo a un número de prueba.</p><button type="button" onClick={() => { setCarmenFlipped(false); setCarmenTestOpen(true); }} className="mt-6 w-full rounded-lg bg-[#F4CD04] px-4 py-3 text-sm font-semibold text-[#053E68]">Generar mensaje de prueba</button><button type="button" onClick={() => setCarmenFlipped(false)} className="mt-3 w-full text-sm text-blue-100">Volver a la tarjeta</button></section></div>}
+    {carmenTestOpen && <CarmenTestModal onClose={() => setCarmenTestOpen(false)} />}
   </div>;
+}
+
+const threeDaysFromNow = () => { const date = new Date(); date.setDate(date.getDate() + 3); return date.toISOString().slice(0, 10); };
+const emptyCarmenForm = () => ({ company_name: '', project_name: '', customer_name: '', phone: '', due_date: threeDaysFromNow(), total_pending: '', lots: [''] });
+const isValidTestPhone = (phone) => {
+  if (!/^[+\d\s-]+$/.test(phone)) return false;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 8 || (digits.length >= 10 && digits.length <= 15);
+};
+
+function CarmenTestModal({ onClose }) {
+  const { authToken, logout } = useAuth();
+  const [projects, setProjects] = useState([]);
+  const [form, setForm] = useState(emptyCarmenForm);
+  const [preview, setPreview] = useState(null);
+  const [imageSource, setImageSource] = useState('');
+  const [imageReady, setImageReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState(null);
+
+  const companies = [...new Set(projects.map(project => project.company_name).filter(Boolean))];
+  const projectOptions = projects.filter(project => project.company_name === form.company_name);
+  const busy = loading || generating || sending;
+  const clearPreview = () => { setPreview(null); setImageReady(false); setImageSource(source => { if (source) URL.revokeObjectURL(source); return ''; }); setResult(null); };
+  const update = (field, value) => { setForm(current => ({ ...current, [field]: value })); clearPreview(); };
+
+  useEffect(() => {
+    let mounted = true;
+    apiFetch('/api/v1/cobros/reminders/projects', { token: authToken, onUnauthorized: logout }).then(async response => {
+      const data = await response.json().catch(() => ({}));
+      if (!mounted) return;
+      if (!response.ok) setError(response.status === 404 ? 'No existe el servicio de configuraciones de recordatorios.' : 'No se pudieron cargar las configuraciones de Carmen.');
+      else setProjects(listFrom(data));
+    }).catch(requestError => { if (mounted && requestError.message !== 'Unauthorized') setError('No se pudieron cargar las configuraciones de Carmen.'); }).finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [authToken, logout]);
+  useEffect(() => () => { if (imageSource) URL.revokeObjectURL(imageSource); }, [imageSource]);
+
+  const formError = () => {
+    if (!form.company_name || !form.project_name || !form.customer_name.trim() || !form.total_pending || !form.lots.some(lot => lot.trim())) return 'Completa todos los campos obligatorios y al menos un lote.';
+    if (!isValidTestPhone(form.phone)) return 'Ingresa un teléfono de Guatemala de 8 dígitos o uno internacional de 10 a 15 dígitos.';
+    if (Number(form.total_pending) <= 0) return 'El total pendiente debe ser mayor que cero.';
+    return '';
+  };
+  const payload = () => ({ ...form, customer_name: form.customer_name.trim(), total_pending: Number(form.total_pending), lots: form.lots.map(lot => lot.trim()).filter(Boolean) });
+
+  const generate = async () => {
+    const validationError = formError();
+    if (validationError) { setError(validationError); return; }
+    setGenerating(true); setError(''); clearPreview();
+    try {
+      const response = await apiFetch('/api/v1/cobros/reminders/test/preview', { method: 'POST', token: authToken, onUnauthorized: logout, body: payload() });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(response.status === 404 ? 'No existe una configuración para esta empresa y proyecto. Configúrala primero en Mensajería.' : apiMessage(response.status, data.detail));
+      setPreview(data);
+      const imageResponse = await apiFetch(data.image_url, { token: authToken, onUnauthorized: logout });
+      if (!imageResponse.ok) throw new Error('Se generó el mensaje, pero no se pudo cargar la imagen bancaria.');
+      const objectUrl = URL.createObjectURL(await imageResponse.blob());
+      setImageSource(objectUrl); setImageReady(true);
+    } catch (requestError) { if (requestError.message !== 'Unauthorized') setError(requestError.message); } finally { setGenerating(false); }
+  };
+  const send = async () => {
+    if (!preview || !imageReady || !preview.message?.trim() || sending) return;
+    setSending(true); setError('');
+    try {
+      const response = await apiFetch('/api/v1/cobros/reminders/test/send', { method: 'POST', token: authToken, onUnauthorized: logout, body: { company_name: form.company_name, project_name: form.project_name, phone: form.phone, message: preview.message } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(response.status === 502 ? (data.detail?.message || data.detail || 'Evolution no pudo enviar la prueba.') : apiMessage(response.status, data.detail));
+      setResult(data); setConfirming(false);
+    } catch (requestError) { if (requestError.message !== 'Unauthorized') setError(requestError.message); } finally { setSending(false); }
+  };
+
+  return createPortal(<><div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"><div role="dialog" aria-modal="true" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-200 px-6 py-5"><div><p className="text-sm font-medium text-[#0B5A8E]">Modo de prueba</p><h3 className="text-xl font-bold text-[#053E68]">Recordatorio de Carmen</h3><p className="mt-1 text-sm text-slate-500">Genera una simulación antes de enviar un WhatsApp real a un número de prueba.</p></div><button type="button" disabled={busy} onClick={onClose} className="!p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button></header><div className="overflow-y-auto p-6"><div className="mb-5 flex gap-2 text-sm"><span className="rounded-full bg-[#053E68] px-3 py-1 font-semibold text-white">1. Datos y vista previa</span><span className={`rounded-full px-3 py-1 font-semibold ${preview ? 'bg-[#F4CD04] text-[#053E68]' : 'bg-slate-100 text-slate-500'}`}>2. Envío controlado</span></div>{error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}{result && <div className="mb-4 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800"><b>Prueba aceptada por Evolution.</b><div className="mt-2 grid gap-1 sm:grid-cols-2"><span>Teléfono: {result.phone || preview?.normalized_phone}</span><span>Instancia: {result.evolution_instance || preview?.evolution_instance}</span><span>Typing: {result.typing_seconds ?? '—'} segundos</span>{result.evolution_message_id && <span>ID: {result.evolution_message_id}</span>}</div><p className="mt-2 text-xs">Aceptada confirma recepción por Evolution, no entrega ni lectura por el destinatario.</p></div>}<div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-medium text-slate-700">Empresa<select disabled={busy} value={form.company_name} onChange={event => { update('company_name', event.target.value); setForm(current => ({ ...current, company_name: event.target.value, project_name: '' })); }} className={inputCls}><option value="">Selecciona una empresa</option>{companies.map(company => <option key={company} value={company}>{company}</option>)}</select></label><label className="text-sm font-medium text-slate-700">Proyecto<select disabled={busy || !form.company_name} value={form.project_name} onChange={event => update('project_name', event.target.value)} className={inputCls}><option value="">Selecciona un proyecto</option>{projectOptions.map(project => <option key={project.id} value={project.project_name}>{project.project_name}</option>)}</select></label><label className="text-sm font-medium text-slate-700">Nombre del cliente<input disabled={busy} value={form.customer_name} onChange={event => update('customer_name', event.target.value)} className={inputCls} /></label><label className="text-sm font-medium text-slate-700">Teléfono de prueba<input disabled={busy} value={form.phone} onChange={event => update('phone', event.target.value)} placeholder="46309289 o +502 4630-9289" className={inputCls} /></label><label className="text-sm font-medium text-slate-700">Fecha de vencimiento<input disabled={busy} type="date" value={form.due_date} onChange={event => update('due_date', event.target.value)} className={inputCls} /></label><label className="text-sm font-medium text-slate-700">Total pendiente<input disabled={busy} type="number" min="0.01" step="0.01" value={form.total_pending} onChange={event => update('total_pending', event.target.value)} className={inputCls} /></label></div><div className="mt-4 rounded-xl border border-slate-200 p-4"><div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold text-slate-700">Lotes</p><button type="button" disabled={busy} onClick={() => update('lots', [...form.lots, ''])} className="inline-flex items-center gap-1 text-sm font-medium text-[#053E68]"><Plus className="h-4 w-4" />Agregar lote</button></div>{form.lots.map((lot, index) => <div key={index} className="mb-2 flex gap-2"><input disabled={busy} value={lot} onChange={event => update('lots', form.lots.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder={`Lote ${index + 1}`} className={inputCls} />{form.lots.length > 1 && <button type="button" disabled={busy} onClick={() => update('lots', form.lots.filter((_, itemIndex) => itemIndex !== index))} className="!p-2 text-red-500"><Trash2 className="h-4 w-4" /></button>}</div>)}</div>{preview && <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50/40 p-5"><h4 className="font-semibold text-[#053E68]">Vista previa del mensaje</h4><div className="mt-4 grid gap-5 md:grid-cols-[220px_1fr]"><div>{imageSource ? <img src={imageSource} alt="Imagen bancaria configurada" className="max-h-72 w-full rounded-lg object-contain bg-white" /> : <div className="rounded-lg bg-white p-5 text-sm text-slate-500">Cargando imagen…</div>}</div><div><textarea value={preview.message || ''} disabled={busy} onChange={event => setPreview(current => ({ ...current, message: event.target.value }))} rows="8" className="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm leading-6 outline-none focus:border-[#053E68]" /><p className="mt-2 text-xs text-slate-500">La imagen y este texto se enviarán juntos en un solo mensaje.</p><div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600"><span>Empresa: {preview.company_name || form.company_name}</span><span>Proyecto: {preview.project_name || form.project_name}</span><span>Instancia: {preview.evolution_instance || '—'}</span><span>Teléfono: {preview.normalized_phone || '—'}</span><span>Total: {preview.total_pending ?? form.total_pending}</span><span>Modelo: {preview.model || '—'}</span><span>Palabras: {preview.word_count ?? '—'}</span><span>Typing antes del envío: {preview.typing_seconds ?? '—'} s</span></div></div></div></div>}</div><footer className="flex flex-wrap justify-end gap-3 border-t border-slate-200 px-6 py-4"><button type="button" disabled={busy} onClick={generate} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50">{generating && <Loader2 className="h-4 w-4 animate-spin" />}{generating ? 'Generando mensaje con Carmen…' : 'Generar vista previa'}</button><button type="button" disabled={!preview || !imageReady || !preview.message?.trim() || busy} onClick={() => setConfirming(true)} className="rounded-lg bg-[#053E68] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Enviar prueba</button></footer></div></div>{confirming && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"><div className="max-w-md rounded-2xl bg-white p-6 shadow-2xl"><h4 className="font-bold text-[#053E68]">¿Enviar recordatorio real?</h4><p className="mt-2 text-sm text-slate-600">Se enviará un recordatorio real por WhatsApp al número <b>{preview?.normalized_phone || form.phone}</b>, usando la instancia <b>{preview?.evolution_instance}</b>. ¿Deseas continuar?</p><div className="mt-6 flex justify-end gap-3"><button disabled={sending} onClick={() => setConfirming(false)} className="rounded-lg bg-slate-100 px-4 py-2 text-sm">Cancelar</button><button disabled={sending} onClick={send} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white">{sending ? 'Enviando…' : 'Sí, enviar prueba'}</button></div></div></div>}</>, document.body);
 }
 
 export default function AgentCallTestsView() {
@@ -93,6 +173,8 @@ export default function AgentCallTestsView() {
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeCall, setActiveCall] = useState(null);
+  const [carmenFlipped, setCarmenFlipped] = useState(false);
+  const [carmenTestOpen, setCarmenTestOpen] = useState(false);
 
   const loadAgents = useCallback(async () => {
     setLoading(true); setError('');
@@ -123,6 +205,16 @@ export default function AgentCallTestsView() {
     const timer = window.setInterval(poll, 2500);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [activeCall?.status_url, activeCall?.polling, authToken, logout]);
+
+  useEffect(() => {
+    const handleCarmenStatusClick = (event) => {
+      const status = event.target.closest('span');
+      const card = status?.closest('article');
+      if (status?.textContent === 'Activo' && card?.textContent?.toLowerCase().includes('carmen')) setCarmenFlipped(true);
+    };
+    document.addEventListener('click', handleCarmenStatusClick);
+    return () => document.removeEventListener('click', handleCarmenStatusClick);
+  }, []);
 
   const openTest = (agent) => {
     if (activeCall?.polling) return;
