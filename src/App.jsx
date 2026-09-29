@@ -26,6 +26,7 @@ import UsersView from './components/UsersView.jsx';
 import SettingsView from './components/SettingsView.jsx';
 import AgentCallTestsView from './components/AgentCallTestsView.jsx';
 import OverduePortfolioView from './components/OverduePortfolioView.jsx';
+import MessagingView from './components/MessagingView.jsx';
 
 const PATH_LABELS = {
   '/dashboard':     'Dashboard',
@@ -41,6 +42,7 @@ const PATH_LABELS = {
   '/prompts/new':   'Nuevo Agente',
   '/users':         'Usuarios',
   '/settings':      'Configuración',
+  '/messaging':     'Mensajería',
   '/agent-call-tests': 'Pruebas de Agentes',
 };
 
@@ -628,6 +630,10 @@ function AppShell() {
 
           <Route path="/settings" element={
             isAdmin ? <SettingsView /> : <Navigate to="/dashboard" replace />
+          } />
+
+          <Route path="/messaging" element={
+            isAdmin ? <MessagingView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="/agent-call-tests" element={

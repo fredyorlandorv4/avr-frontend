@@ -1,8 +1,9 @@
-import { NavLink } from 'react-router-dom';
-import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles, FlaskConical, WalletCards } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles, FlaskConical, WalletCards, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const ADMIN_ONLY = new Set(['prompts', 'agent-call-tests', 'users', 'settings']);
+const ADMIN_ONLY = new Set(['prompts', 'agent-call-tests', 'users']);
 const ADMIN_OR_SUPERVISOR = new Set(['overdue-portfolio']);
 // El área de marketing (telemarketing) no accede a proyectos.
 const TELEMARKETING_HIDDEN = new Set(['projects']);
@@ -19,12 +20,17 @@ const NAV_ITEMS = [
   { id: 'prompts',   label: 'Prompts',             path: '/prompts',   Icon: FileText  },
   { id: 'agent-call-tests', label: 'Pruebas de Agentes', path: '/agent-call-tests', Icon: FlaskConical },
   { id: 'users',     label: 'Usuarios',            path: '/users',     Icon: Users     },
-  { id: 'settings',  label: 'Configuración',       path: '/settings',  Icon: Settings  },
 ];
 
 export default function Sidebar({ sidebarOpen, onClose }) {
 
   const { logout, isAdmin, username, role, areaName, isSystem } = useAuth();
+  const { pathname } = useLocation();
+  const [settingsOpen, setSettingsOpen] = useState(() => pathname === '/settings' || pathname === '/messaging');
+
+  useEffect(() => {
+    if (pathname === '/settings' || pathname === '/messaging') setSettingsOpen(true);
+  }, [pathname]);
 
   const capitalizeFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
   const panelLabel = (isSystem || !areaName) ? 'Panel de Gestiones' : capitalizeFirst(areaName);
@@ -96,6 +102,46 @@ export default function Sidebar({ sidebarOpen, onClose }) {
               {label}
             </NavLink>
           ))}
+
+          {isAdmin && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(open => !open)}
+                className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
+                  pathname === '/settings' || pathname === '/messaging'
+                    ? 'bg-white/10 text-white'
+                    : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                }`}
+                aria-expanded={settingsOpen}
+              >
+                <Settings className="w-5 h-5 flex-shrink-0" />
+                <span className="flex-1 text-left">Configuración</span>
+                {settingsOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+
+              {settingsOpen && (
+                <div className="mt-1 ml-4 pl-3 space-y-1 border-l border-white/20">
+                  <NavLink
+                    to="/settings"
+                    onClick={onClose}
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-[#F4CD04] text-[#053E68] font-semibold' : 'text-blue-100 hover:bg-white/10 hover:text-white'}`}
+                  >
+                    <Users className="w-4 h-4" />
+                    Áreas y Subáreas
+                  </NavLink>
+                  <NavLink
+                    to="/messaging"
+                    onClick={onClose}
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-[#F4CD04] text-[#053E68] font-semibold' : 'text-blue-100 hover:bg-white/10 hover:text-white'}`}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Mensajería
+                  </NavLink>
+                </div>
+              )}
+            </div>
+          )}
         </nav>
 
         {/* Logout */}
