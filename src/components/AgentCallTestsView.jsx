@@ -31,6 +31,41 @@ function initialValues(fields = []) {
   }, {});
 }
 
+// Algunos agentes exponen un dato operativo y la variable equivalente del
+// prompt (por ejemplo, "Nombre" y "Prompt nombre"). Ambos deben viajar al
+// backend, pero pedirlos dos veces resulta confuso. Se identifica la segunda
+// variante por su etiqueta para mostrar solo un control y sincronizar valores.
+function promptFieldKey(label = '') {
+  return label
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toLowerCase()
+    .replace(/^prompt\s*[:-]?\s*/, '')
+    .replace(/\s+(del?\s+cliente|cliente|de\s+prueba)$/, '');
+}
+
+function fieldsForTestForm(fields = []) {
+  const visible = [];
+  const fieldsByKey = new Map();
+
+  fields.forEach((field) => {
+    const key = promptFieldKey(field.label);
+    const isPromptField = /^prompt\b/i.test(field.label?.trim() || '');
+    const original = fieldsByKey.get(key);
+
+    if (isPromptField && original) {
+      original.syncedPaths.push(field.path);
+      return;
+    }
+
+    const displayField = { ...field, syncedPaths: [field.path] };
+    visible.push(displayField);
+    // Solo los campos base pueden absorber su equivalente "Prompt ...".
+    if (!isPromptField) fieldsByKey.set(key, displayField);
+  });
+
+  return visible;
+}
+
 function setPath(target, path, value) {
   const keys = path.split('.');
   let cursor = target;
@@ -217,7 +252,13 @@ export default function AgentCallTestsView() {
     if (activeCall?.polling) return;
     setTest(agent); setValues(initialValues(agent.fields)); setFieldErrors({}); setValidation(null); setConfirming(false);
   };
-  const changeValue = (path, value) => { setValues((current) => ({ ...current, [path]: value })); setValidation(null); setFieldErrors((current) => ({ ...current, [path]: undefined })); };
+  const visibleTestFields = useMemo(() => fieldsForTestForm(test?.fields), [test]);
+  const changeValue = (paths, value) => {
+    const syncedPaths = Array.isArray(paths) ? paths : [paths];
+    setValues((current) => ({ ...current, ...Object.fromEntries(syncedPaths.map(path => [path, value])) }));
+    setValidation(null);
+    setFieldErrors((current) => ({ ...current, ...Object.fromEntries(syncedPaths.map(path => [path, undefined])) }));
+  };
   const testBody = useMemo(() => test ? requestBody(test.fields || [], values) : null, [test, values]);
 
   const validate = async () => {
@@ -255,7 +296,7 @@ export default function AgentCallTestsView() {
     {error && <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">{error}</div>}
     {activeCall && <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-semibold text-[#053E68]">Prueba: {activeCall.agent_name}</p><p className="text-sm text-gray-500">{activeCall.phone}</p></div><span className={`px-3 py-1 rounded-full text-xs font-semibold ${activeCall.polling ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>{STATUS_LABELS[activeCall.status] || activeCall.status}</span></div><div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 text-sm"><p><span className="text-gray-400">UUID:</span> {activeCall.call_uuid || '—'}</p><p><span className="text-gray-400">Creada:</span> {formatDate(activeCall.created_at)}</p><p><span className="text-gray-400">Contestada:</span> {formatDate(activeCall.answered_at)}</p><p><span className="text-gray-400">Finalizada:</span> {formatDate(activeCall.completed_at || activeCall.finished_at)}</p></div>{activeCall.error && <p className="text-sm text-red-600 mt-3">{activeCall.error}</p>}</section>}
     {loading ? <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#053E68]" /></div> : <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">{agents.map((agent) => <article key={agent.agent_id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4"><div className="flex justify-between gap-4"><div><h3 className="font-bold text-lg text-[#053E68]">{agent.agent_name}</h3><p className="text-sm text-gray-400">{agent.area || '—'} · {agent.subarea || 'Sin subárea'}</p></div><span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${agent.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{agent.active ? 'Activo' : 'Inactivo'}</span></div><div className="text-sm text-gray-600 grid grid-cols-1 sm:grid-cols-2 gap-2"><p><b>Proveedor:</b> {agent.voice_provider === 'openai_live' ? 'OpenAI GPT-Live' : 'ElevenLabs'}</p><p><b>Modelo:</b> {agent.voice_model || '—'}</p><p><b>DID:</b> {agent.did || '—'}</p></div>{agent.ready ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full"><CheckCircle2 className="w-4 h-4" />Listo para probar</span> : <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700"><p className="font-medium">No listo para probar</p><ul className="list-disc ml-5 mt-1">{(agent.blockers || []).map((item, i) => <li key={i}>{item}</li>)}</ul></div>}{(agent.warnings || []).length > 0 && <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800"><div className="flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /><ul className="list-disc ml-3">{agent.warnings.map((item, i) => <li key={i}>{item}</li>)}</ul></div></div>}<button disabled={!agent.ready || isBusy} onClick={() => openTest(agent)} className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#053E68] text-white rounded-lg hover:bg-[#06497c] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"><PhoneCall className="w-4 h-4" />Generar llamada de prueba</button></article>)}</div>}
-    {test && createPortal(<div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-5 border-b flex justify-between gap-4"><div><h3 className="font-bold text-lg text-[#053E68]">Prueba de {test.agent_name}</h3><p className="text-sm text-gray-400">Completa los datos definidos por el backend.</p></div><button disabled={validating || submitting} onClick={() => setTest(null)} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button></div><div className="p-5 overflow-y-auto space-y-4">{(test.fields || []).map((field) => <DynamicField key={field.path} field={field} value={values[field.path]} onChange={(value) => changeValue(field.path, value)} disabled={validating || submitting} error={fieldErrors[field.path]} />)}{validation && <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">Teléfono normalizado: <b>{validation.phone}</b></div>}</div><div className="p-5 border-t flex flex-wrap justify-end gap-3"><button disabled={validating || submitting} onClick={validate} className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">{validating ? 'Validando…' : 'Validar datos'}</button><button disabled={!validation || validating || submitting} onClick={() => setConfirming(true)} className="px-4 py-2 text-sm rounded-lg bg-[#053E68] text-white hover:bg-[#06497c] disabled:opacity-50">Confirmar llamada</button></div></div></div>, document.body)}
+    {test && createPortal(<div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"><div className="p-5 border-b flex justify-between gap-4"><div><h3 className="font-bold text-lg text-[#053E68]">Prueba de {test.agent_name}</h3><p className="text-sm text-gray-400">Completa los datos definidos por el backend.</p></div><button disabled={validating || submitting} onClick={() => setTest(null)} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button></div><div className="p-5 overflow-y-auto space-y-4">{visibleTestFields.map((field) => <DynamicField key={field.path} field={field} value={values[field.path]} onChange={(value) => changeValue(field.syncedPaths, value)} disabled={validating || submitting} error={field.syncedPaths.map(path => fieldErrors[path]).find(Boolean)} />)}{validation && <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">Teléfono normalizado: <b>{validation.phone}</b></div>}</div><div className="p-5 border-t flex flex-wrap justify-end gap-3"><button disabled={validating || submitting} onClick={validate} className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50">{validating ? 'Validando…' : 'Validar datos'}</button><button disabled={!validation || validating || submitting} onClick={() => setConfirming(true)} className="px-4 py-2 text-sm rounded-lg bg-[#053E68] text-white hover:bg-[#06497c] disabled:opacity-50">Confirmar llamada</button></div></div></div>, document.body)}
     {confirming && createPortal(<div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"><div className="flex gap-3"><AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" /><div><h3 className="font-bold text-[#053E68]">¿Realizar llamada real?</h3><p className="text-sm text-gray-600 mt-2">Esta acción realizará una llamada telefónica real. El agente puede ejecutar tools que modifiquen información en el CRM. ¿Deseas continuar?</p></div></div><div className="flex justify-end gap-3 mt-6"><button disabled={submitting} onClick={() => setConfirming(false)} className="px-4 py-2 text-sm bg-gray-100 rounded-lg">Cancelar</button><button disabled={submitting} onClick={queueCall} className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg disabled:opacity-50">{submitting ? 'Encolando…' : 'Sí, realizar llamada'}</button></div></div></div>, document.body)}
     {carmenFlipped && <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-4"><section className="w-full max-w-md rounded-2xl bg-[#053E68] p-7 text-white shadow-2xl"><MessageCircle className="mb-4 h-10 w-10 text-[#F4CD04]" /><p className="text-sm text-blue-100">Recordatorios por WhatsApp</p><h3 className="mt-1 text-xl font-bold">Prueba a Carmen</h3><button type="button" onClick={() => { setCarmenFlipped(false); setCarmenTestOpen(true); }} className="mt-6 w-full rounded-lg bg-[#F4CD04] px-4 py-3 text-sm font-semibold text-[#053E68]">Generar mensaje de prueba</button><button type="button" onClick={() => setCarmenFlipped(false)} className="mt-3 w-full text-sm text-blue-100">Volver a la tarjeta</button></section></div>}
     {carmenTestOpen && <CarmenTestModal onClose={() => setCarmenTestOpen(false)} />}

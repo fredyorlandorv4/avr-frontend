@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useArea } from '../context/AreaContext.jsx';
+import { groupOverdueInstallments } from '../utils/overdueInstallments.js';
 
 const currency = new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ' });
 
@@ -25,22 +26,26 @@ const normalizeClients = (payload) => {
 
   return clients.map((client, clientIndex) => {
     const lots = value(client, ['lotes', 'proyectos_lotes', 'projects'], []);
+    const normalizedLots = Array.isArray(lots) ? lots.map((lot, lotIndex) => {
+      const installments = groupOverdueInstallments(value(lot, ['cuotas_atrasadas', 'cuotas', 'installments'], []));
+      return {
+        id: String(value(lot, ['id', 'lote_id', 'lote', 'codigo_lote'], lotIndex)),
+        project: value(lot, ['proyecto', 'nombre_proyecto', 'project'], 'Proyecto sin nombre'),
+        lot: value(lot, ['lote', 'nombre_lote', 'codigo_lote'], 'Lote sin nombre'),
+        overdueInstallments: installments.length,
+        pendingTotal: amount(lot, ['total_pendiente_lote', 'total_pendiente', 'subtotal']),
+        installments,
+      };
+    }) : [];
     return {
       id: String(value(client, ['id', 'cliente_id', 'codigo_cliente'], clientIndex)),
       name: value(client, ['nombre_cliente', 'cliente', 'nombre', 'name'], 'Cliente sin nombre'),
       company: value(client, ['empresa', 'company']),
       code: value(client, ['codigo_cliente', 'client_code']),
       phone: value(client, ['telefono_principal', 'telefono', 'phone'], 'Sin teléfono'),
-      overdueInstallments: amount(client, ['total_cuotas_atrasadas', 'cantidad_cuotas_atrasadas']),
+      overdueInstallments: normalizedLots.reduce((total, lot) => total + lot.overdueInstallments, 0),
       pendingTotal: amount(client, ['total_pendiente', 'saldo_total']),
-      lots: Array.isArray(lots) ? lots.map((lot, lotIndex) => ({
-        id: String(value(lot, ['id', 'lote_id', 'lote', 'codigo_lote'], lotIndex)),
-        project: value(lot, ['proyecto', 'nombre_proyecto', 'project'], 'Proyecto sin nombre'),
-        lot: value(lot, ['lote', 'nombre_lote', 'codigo_lote'], 'Lote sin nombre'),
-        overdueInstallments: amount(lot, ['cantidad_cuotas_atrasadas', 'total_cuotas_atrasadas']),
-        pendingTotal: amount(lot, ['total_pendiente_lote', 'total_pendiente', 'subtotal']),
-        installments: value(lot, ['cuotas_atrasadas', 'cuotas', 'installments'], []),
-      })) : [],
+      lots: normalizedLots,
     };
   });
 };
@@ -214,7 +219,7 @@ export default function OverduePortfolioView() {
                   <div className="min-w-0 flex-1"><p className="font-medium text-gray-800">{lot.project}</p><p className="text-sm text-gray-500">{lot.lot}</p></div>
                   <div className="hidden sm:grid grid-cols-2 gap-x-6 text-sm shrink-0"><span className="text-gray-500">Cuotas atrasadas</span><span className="font-medium text-right">{lot.overdueInstallments}</span><span className="text-gray-500">Pendiente</span><span className="font-semibold text-right text-[#053E68]">{currency.format(lot.pendingTotal)}</span></div>
                 </button>
-                {lotExpanded && <div className="overflow-x-auto border-t border-gray-100"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Cuota', 'Concepto', 'Fecha compromiso', 'Antigüedad', 'Total a pagar'].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{lot.installments.length ? lot.installments.map((installment, index) => <tr key={`${value(installment, ['id', 'numero_cuota'], index)}`}><td className="px-4 py-3">{value(installment, ['numero_cuota', 'cuota'], '—')}</td><td className="px-4 py-3">{value(installment, ['concepto', 'description'], '—')}</td><td className="px-4 py-3 whitespace-nowrap">{value(installment, ['fecha_compromiso', 'fecha_vencimiento'], '—')}</td><td className="px-4 py-3">{value(installment, ['antiguedad'], '—')}</td><td className="px-4 py-3 font-medium whitespace-nowrap">{currency.format(amount(installment, ['total_a_pagar', 'saldo', 'monto_pendiente']))}</td></tr>) : <tr><td colSpan="5" className="px-4 py-7 text-center text-gray-400">No hay cuotas vencidas para este lote.</td></tr>}</tbody></table></div>}
+                {lotExpanded && <div className="overflow-x-auto border-t border-gray-100"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['Cuota', 'Concepto', 'Fecha compromiso', 'Antigüedad', 'Total a pagar'].map((header) => <th key={header} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{lot.installments.length ? lot.installments.map((installment) => <tr key={installment.key}><td className="px-4 py-3">{installment.number}</td><td className="px-4 py-3">{installment.concept}</td><td className="px-4 py-3 whitespace-nowrap">{installment.dueDate || '—'}</td><td className="px-4 py-3">{installment.age}</td><td className="px-4 py-3 font-medium whitespace-nowrap">{currency.format(installment.total)}</td></tr>) : <tr><td colSpan="5" className="px-4 py-7 text-center text-gray-400">No hay cuotas vencidas para este lote.</td></tr>}</tbody></table></div>}
               </div>;
             })}
             {!client.lots.length && <p className="py-4 text-center text-sm text-gray-400">No hay lotes vencidos para este cliente.</p>}

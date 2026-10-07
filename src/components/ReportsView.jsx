@@ -231,14 +231,26 @@ export default function ReportsView() {
     const userNamesById = new Map();
     let skip = 0;
 
-    try {
-      const usersResponse = await apiFetch('/api/v1/auth/users', { token: authToken, onUnauthorized: logout });
-      if (usersResponse.ok) {
-        const users = await usersResponse.json();
-        users.forEach((user) => userNamesById.set(String(user.id), user.full_name || user.username || `Usuario #${user.id}`));
-      }
-    } catch (error) {
-      console.warn('No se pudo obtener el creador de las campañas', error);
+    const userRequests = [apiFetch('/api/v1/auth/me', { token: authToken, onUnauthorized: logout })];
+    if (isAdmin) {
+      userRequests.push(apiFetch('/api/v1/auth/users?skip=0&limit=100', { token: authToken, onUnauthorized: logout }));
+    } else {
+      const params = new URLSearchParams({
+        date_from: dateStart || '2000-01-01',
+        // La consulta de estadísticas compara timestamps; incluir el día final completo.
+        date_to: new Date(Date.parse(`${dateEnd || today()}T00:00:00Z`) + 86400000).toISOString().slice(0, 10),
+      });
+      if (scope.areaId != null) params.set('area_id', String(scope.areaId));
+      userRequests.push(apiFetch(`/api/v1/dashboard/agents/stats?${params}`, { token: authToken, onUnauthorized: logout }));
+    }
+    const userResponses = await Promise.allSettled(userRequests);
+    for (const result of userResponses) {
+      if (result.status !== 'fulfilled' || !result.value.ok) continue;
+      const users = await result.value.json();
+      (Array.isArray(users) ? users : [users]).forEach((user) => {
+        const name = user.full_name?.trim() || user.username?.trim() || user.agent_name?.trim();
+        if (name) userNamesById.set(String(user.id ?? user.user_id), name);
+      });
     }
 
     // Reportes se alimenta de llamadas, que pueden pertenecer a campañas
@@ -272,7 +284,8 @@ export default function ReportsView() {
               if (!currentLots.includes(contact.lote)) lotsByCallId.set(callId, [...currentLots, contact.lote]);
             }
             if (callId && callIds.has(callId)) {
-              creatorsByCallId.set(callId, userNamesById.get(String(campaign.user_id)) || `Usuario #${campaign.user_id}`);
+              const creator = campaign.creator_name || campaign.user_name || userNamesById.get(String(campaign.user_id));
+              if (creator) creatorsByCallId.set(callId, creator);
             }
           });
         } catch (error) {
@@ -286,7 +299,7 @@ export default function ReportsView() {
     }
 
     return { lotsByCallId, creatorsByCallId };
-  }, [authToken, logout, scope.areaId]);
+  }, [authToken, logout, isAdmin, dateStart, dateEnd, scope.areaId]);
 
   const fetchFollowUps = useCallback(async () => {
     const all = [];
@@ -325,7 +338,7 @@ export default function ReportsView() {
       setCalls(loadedCalls.map((call) => ({
         ...call,
         lote: call.lote || lotsByCallId.get(String(call.id ?? ''))?.join(', ') || null,
-        campaign_creator: creatorsByCallId.get(String(call.id ?? '')) || null,
+        campaign_creator: creatorsByCallId.get(String(call.id ?? '')) || call.campaign_creator || null,
       })));
       setTablePage(1);
     }
