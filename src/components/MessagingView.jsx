@@ -38,6 +38,8 @@ function Toggle({ checked, disabled, onChange, label }) {
 export default function MessagingView() {
   const { authToken, logout } = useAuth();
   const [settings, setSettings] = useState({});
+  const [promptEditor, setPromptEditor] = useState({ value: '', dirty: false });
+  const [savingPrompt, setSavingPrompt] = useState(false);
   const [projects, setProjects] = useState([]);
   const [runs, setRuns] = useState([]);
   const [form, setForm] = useState(initialForm);
@@ -61,7 +63,9 @@ export default function MessagingView() {
       if (!projectsResponse.ok) throw new Error(await backendError(projectsResponse, 'No se pudieron cargar las configuraciones.'));
       if (!runsResponse.ok) throw new Error(await backendError(runsResponse, 'No se pudo cargar el historial.'));
       const [settingsData, projectsData, runsData] = await Promise.all([settingsResponse.json(), projectsResponse.json(), runsResponse.json()]);
-      setSettings(settingsData); setProjects(listFrom(projectsData)); setRuns(listFrom(runsData));
+      setSettings(settingsData);
+      setPromptEditor(current => current.dirty ? current : { value: settingsData.message_prompt || '', dirty: false });
+      setProjects(listFrom(projectsData)); setRuns(listFrom(runsData));
     } catch (requestError) { if (requestError.message !== 'Unauthorized') setError(requestError.message); } finally { if (!quiet) setLoading(false); }
   }, [authToken, logout]);
 
@@ -87,6 +91,23 @@ export default function MessagingView() {
       }
       await load(true);
     } catch (requestError) { setSettings(current => ({ ...current, enabled: previous })); if (requestError.message !== 'Unauthorized') setError(requestError.message); } finally { setSaving(false); }
+  };
+
+  const savePrompt = async event => {
+    event.preventDefault();
+    if (promptEditor.value.length > 4000) { setError('El prompt no puede superar los 4000 caracteres.'); return; }
+    setSavingPrompt(true); setError('');
+    try {
+      const response = await apiFetch('/api/v1/cobros/reminders/settings', {
+        method: 'PATCH', token: authToken, onUnauthorized: logout,
+        body: { message_prompt: promptEditor.value.trim() || null },
+      });
+      if (!response.ok) throw new Error(await backendError(response, 'No se pudo guardar el prompt.'));
+      const updated = await response.json();
+      setSettings(updated);
+      setPromptEditor({ value: updated.message_prompt || '', dirty: false });
+    } catch (requestError) { if (requestError.message !== 'Unauthorized') setError(requestError.message); }
+    finally { setSavingPrompt(false); }
   };
 
   const saveProject = async event => {
@@ -130,6 +151,28 @@ export default function MessagingView() {
       <button type="button" onClick={() => load()} disabled={loading} className="inline-flex items-center justify-center gap-2 !rounded-xl !border !border-white/25 !bg-white/10 !px-4 !py-2.5 text-sm font-semibold text-white hover:!bg-white/20 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button>
     </div>
     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><b>No se pudo cargar Mensajería.</b> {error}</div>}
+
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-6 py-5">
+        <h3 className="font-semibold text-[#053E68]">Prompt del mensaje</h3>
+        <p className="mt-1 text-sm text-slate-500">Define la personalidad, el tono y la estructura de los mensajes que genera Carmen.</p>
+      </div>
+      <form onSubmit={savePrompt} className="space-y-3 px-6 py-5">
+        <label htmlFor="message-prompt" className="block text-sm font-medium text-slate-700">Instrucciones para Carmen</label>
+        <textarea id="message-prompt" rows={7} maxLength={4000} disabled={loading || savingPrompt}
+          value={promptEditor.value}
+          onChange={event => setPromptEditor({ value: event.target.value, dirty: true })}
+          placeholder="Ej. Usa un tono amable y claro. Saluda al cliente, explica el saldo y cierra con una invitación a comunicarse con nosotros."
+          className="w-full rounded-xl border border-slate-300 p-3 text-sm leading-6 outline-none focus:border-[#0B5A8E] focus:ring-2 focus:ring-[#0B5A8E]/15 disabled:bg-slate-50" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">{promptEditor.value.length}/4000 caracteres. Si lo dejas vacío, se usa el comportamiento predeterminado.</p>
+          <div className="flex items-center gap-3">
+            {promptEditor.dirty && <button type="button" onClick={() => setPromptEditor({ value: settings.message_prompt || '', dirty: false })} disabled={savingPrompt} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Descartar cambios</button>}
+            <button type="submit" disabled={!promptEditor.dirty || savingPrompt || loading} className="rounded-lg bg-[#053E68] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{savingPrompt ? 'Guardando…' : 'Guardar prompt'}</button>
+          </div>
+        </div>
+      </form>
+    </section>
 
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-semibold text-[#053E68]">Automatización diaria</h3><p className="mt-1 text-sm text-slate-500">Controla el envío programado de recordatorios.</p></div><span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${asBoolean(settings.enabled) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{asBoolean(settings.enabled) ? 'Activa' : 'Inactiva'}</span></div><div className="grid gap-5 px-6 py-5 md:grid-cols-[1fr_auto]"><div><p className="font-medium text-slate-800">Activar recordatorios de Carmen</p><p className="mt-1 text-sm text-slate-500">Todos los días a las <b className="font-medium text-slate-700">{settings.daily_hour || '—'}</b> · {settings.timezone || 'Zona horaria no disponible'}</p></div><Toggle label="Activar recordatorios de Carmen" checked={asBoolean(settings.enabled)} disabled={saving || loading} onChange={updateEnabled} /><div className="border-t border-slate-100 pt-4 text-sm text-slate-600 md:col-span-2"><span className="font-semibold text-slate-800">Último resultado: </span>{typeof settings.last_run === 'string' ? settings.last_run : settings.last_run ? JSON.stringify(settings.last_run) : 'Aún no hay ejecuciones registradas.'}</div></div></section>
 

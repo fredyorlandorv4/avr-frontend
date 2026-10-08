@@ -27,6 +27,7 @@ import SettingsView from './components/SettingsView.jsx';
 import AgentCallTestsView from './components/AgentCallTestsView.jsx';
 import OverduePortfolioView from './components/OverduePortfolioView.jsx';
 import MessagingView from './components/MessagingView.jsx';
+import MessagingQueueView from './components/MessagingQueueView.jsx';
 
 const PATH_LABELS = {
   '/dashboard':     'Dashboard',
@@ -43,6 +44,7 @@ const PATH_LABELS = {
   '/users':         'Usuarios',
   '/settings':      'Configuración',
   '/messaging':     'Mensajería',
+  '/settings/messaging': 'Configuración de Mensajería',
   '/agent-call-tests': 'Pruebas de Agentes',
 };
 
@@ -250,6 +252,7 @@ function AppShell() {
   // Restricciones del área de marketing (telemarketing): no crea campañas
   // por Excel ni accede a proyectos. Sí accede a follow-ups.
   const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
+  const canViewMessaging = isAdmin || (role === 'supervisor' && (areaName || '').trim().toLowerCase() === 'cobros');
   const canCreateCampaigns = !isTelemarketing;
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -633,6 +636,10 @@ function AppShell() {
           } />
 
           <Route path="/messaging" element={
+            canViewMessaging ? <MessagingQueueView /> : <Navigate to="/dashboard" replace />
+          } />
+
+          <Route path="/settings/messaging" element={
             isAdmin ? <MessagingView /> : <Navigate to="/dashboard" replace />
           } />
 

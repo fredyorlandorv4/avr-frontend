@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { id: 'calls',     label: 'Monitor de Llamadas', path: '/calls',     Icon: Phone     },
   { id: 'call-analysis', label: 'Análisis de llamadas', path: '/call-analysis', Icon: Sparkles },
   { id: 'reports',   label: 'Reportes',            path: '/reports',   Icon: BarChart3 },
+  { id: 'messaging', label: 'Mensajería', path: '/messaging', Icon: MessageSquare },
   { id: 'overdue-portfolio', label: 'Consulta SAP', path: '/consulta-sap', Icon: WalletCards },
   { id: 'campaigns', label: 'Campañas',            path: '/campaigns', Icon: Target    },
   { id: 'followups', label: 'Follow Ups',          path: '/followups', Icon: Clock     },
@@ -26,10 +27,10 @@ export default function Sidebar({ sidebarOpen, onClose }) {
 
   const { logout, isAdmin, username, role, areaName, isSystem } = useAuth();
   const { pathname } = useLocation();
-  const [settingsOpen, setSettingsOpen] = useState(() => pathname === '/settings' || pathname === '/messaging');
+  const [settingsOpen, setSettingsOpen] = useState(() => pathname === '/settings' || pathname === '/settings/messaging');
 
   useEffect(() => {
-    if (pathname === '/settings' || pathname === '/messaging') setSettingsOpen(true);
+    if (pathname === '/settings' || pathname === '/settings/messaging') setSettingsOpen(true);
   }, [pathname]);
 
   const capitalizeFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -40,6 +41,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
   const visibleItems = NAV_ITEMS.filter(({ id }) => {
     if (ADMIN_ONLY.has(id) && !isAdmin) return false;
     if (ADMIN_OR_SUPERVISOR.has(id) && !['admin', 'supervisor'].includes(role)) return false;
+    if (id === 'messaging' && !(isAdmin || (role === 'supervisor' && (areaName || '').trim().toLowerCase() === 'cobros'))) return false;
     if (isTelemarketing && TELEMARKETING_HIDDEN.has(id)) return false;
     return true;
   });
@@ -109,7 +111,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
                 type="button"
                 onClick={() => setSettingsOpen(open => !open)}
                 className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
-                  pathname === '/settings' || pathname === '/messaging'
+                  pathname === '/settings' || pathname === '/settings/messaging'
                     ? 'bg-white/10 text-white'
                     : 'text-blue-100 hover:bg-white/10 hover:text-white'
                 }`}
@@ -131,7 +133,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
                     Áreas y Subáreas
                   </NavLink>
                   <NavLink
-                    to="/messaging"
+                    to="/settings/messaging"
                     onClick={onClose}
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-[#F4CD04] text-[#053E68] font-semibold' : 'text-blue-100 hover:bg-white/10 hover:text-white'}`}
                   >
