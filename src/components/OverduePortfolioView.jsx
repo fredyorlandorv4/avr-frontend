@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, RefreshCw, Phone, WalletCards, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, RefreshCw, Phone, Send, WalletCards, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api.js';
@@ -18,6 +18,7 @@ const value = (source, keys, fallback = '') => {
 };
 
 const amount = (source, keys) => Number(value(source, keys, 0)) || 0;
+const clientIdentity = value => String(value || '').trim().toLocaleLowerCase('es-GT');
 
 const normalizeClients = (payload) => {
   const clients = Array.isArray(payload)
@@ -74,6 +75,10 @@ export default function OverduePortfolioView() {
   const [selectedSubareaId, setSelectedSubareaId] = useState('');
   const [creating, setCreating] = useState(false);
   const [campaignError, setCampaignError] = useState('');
+  const [messageSelection, setMessageSelection] = useState(null);
+  const [sendingMessages, setSendingMessages] = useState(false);
+  const [messageError, setMessageError] = useState('');
+  const [messageSuccess, setMessageSuccess] = useState('');
 
   const load = useCallback(async () => {
     if (!authToken) return;
@@ -192,6 +197,58 @@ export default function OverduePortfolioView() {
     }
   };
 
+  const prepareMessageSend = async () => {
+    if (!selectedClients.length) return;
+    setMessageError(''); setMessageSuccess('');
+    try {
+      const response = await apiFetch('/api/v1/cobros/reminders/candidates', { token: authToken, onUnauthorized: logout });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || 'No se pudieron consultar los candidatos para Mensajería.');
+      const selectedCodes = new Set(selectedClients.map(client => clientIdentity(client.code)).filter(Boolean));
+      const selectedNames = new Set(selectedClients.map(client => clientIdentity(client.name)).filter(Boolean));
+      const matching = (Array.isArray(payload) ? payload : []).filter(candidate => (
+        selectedCodes.has(clientIdentity(candidate.customer_code))
+        || selectedNames.has(clientIdentity(candidate.customer_name))
+      ));
+      const ready = matching.filter(candidate => candidate.send_ready);
+      if (!ready.length) {
+        const reasons = [...new Set(matching.map(candidate => candidate.unavailable_reason).filter(Boolean))];
+        throw new Error(reasons.length ? `Ningún cliente seleccionado está listo para envío: ${reasons.join('. ')}` : 'Los clientes seleccionados no tienen mensajes disponibles para la fecha programada.');
+      }
+      setMessageSelection({ ready, unavailable: matching.length - ready.length });
+    } catch (requestError) {
+      if (requestError.message !== 'Unauthorized') setMessageError(requestError.message || 'No se pudieron preparar los mensajes.');
+    }
+  };
+
+  const sendSelectedMessages = async () => {
+    if (!messageSelection?.ready?.length || sendingMessages) return;
+    setSendingMessages(true); setMessageError('');
+    try {
+      const candidatesByDate = messageSelection.ready.reduce((groups, candidate) => {
+        const dueDate = candidate.due_date;
+        groups.set(dueDate, [...(groups.get(dueDate) || []), candidate.delivery_key]);
+        return groups;
+      }, new Map());
+      const results = [];
+      for (const [dueDate, deliveryKeys] of candidatesByDate) {
+        const response = await apiFetch('/api/v1/cobros/reminders/send', {
+          method: 'POST', token: authToken, onUnauthorized: logout,
+          body: { due_date: dueDate, delivery_keys: deliveryKeys },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || 'No se pudieron encolar los mensajes.');
+        results.push(payload);
+      }
+      const count = results.reduce((total, result) => total + (result.selected_count || 0), 0);
+      setMessageSuccess(`${count} mensaje${count === 1 ? '' : 's'} encolado${count === 1 ? '' : 's'} para envío.`);
+      setMessageSelection(null);
+      setSelectedClientIds(new Set());
+    } catch (requestError) {
+      if (requestError.message !== 'Unauthorized') setMessageError(requestError.message || 'No se pudieron encolar los mensajes.');
+    } finally { setSendingMessages(false); }
+  };
+
   return <div className="max-w-[1400px] mx-auto space-y-5">
     <section className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -199,9 +256,11 @@ export default function OverduePortfolioView() {
           <h2 className="text-xl font-bold text-[#053E68]">Consulta SAP</h2>
           <p className="text-sm text-gray-500 mt-1">{loading ? 'Consultando cartera externa...' : `${clients.length} ${clients.length === 1 ? 'cliente con saldo vencido' : 'clientes con saldo vencido'}`}</p>
         </div>
-        <div className="flex flex-wrap gap-2"><button onClick={load} disabled={loading} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button><button onClick={openCampaignForm} disabled={loading || selectedClientIds.size === 0} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#053E68] text-white text-sm font-medium hover:bg-[#06497c] disabled:opacity-50"><WalletCards className="w-4 h-4" />Crear Campaña{selectedClientIds.size ? ` (${selectedClientIds.size})` : ''}</button></div>
+        <div className="flex flex-wrap gap-2"><button onClick={load} disabled={loading || sendingMessages} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button><button onClick={openCampaignForm} disabled={loading || selectedClientIds.size === 0 || sendingMessages} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#053E68] text-white text-sm font-medium hover:bg-[#06497c] disabled:opacity-50"><WalletCards className="w-4 h-4" />Crear Campaña{selectedClientIds.size ? ` (${selectedClientIds.size})` : ''}</button><button onClick={prepareMessageSend} disabled={loading || selectedClientIds.size === 0 || sendingMessages} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0B5A8E] px-4 py-2 text-sm font-medium text-white hover:bg-[#053E68] disabled:opacity-50"><Send className="w-4 h-4" />Enviar Mensaje{selectedClientIds.size ? ` (${selectedClientIds.size})` : ''}</button></div>
       </div>
       {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {messageError && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{messageError}</p>}
+      {messageSuccess && <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{messageSuccess}</p>}
     </section>
 
     {loading ? <section className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400">Cargando cartera vencida...</section>
@@ -226,5 +285,6 @@ export default function OverduePortfolioView() {
           </div></td></tr>}</>;
       })}</tbody></table></div></section>}
     {showCampaignForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#053E68]/30 px-4"><div role="dialog" aria-modal="true" aria-labelledby="campaign-title" className="w-full max-w-lg rounded-xl bg-white shadow-xl"><div className="flex items-center justify-between border-b border-gray-100 px-6 py-4"><div><h3 id="campaign-title" className="font-bold text-[#053E68]">Crear campaña de Cobros</h3><p className="text-sm text-gray-500 mt-1">{selectedClients.length} clientes seleccionados</p></div><button onClick={() => !creating && setShowCampaignForm(false)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg" aria-label="Cerrar"><X className="w-5 h-5" /></button></div><div className="space-y-4 p-6"><label className="block text-sm font-medium text-gray-700">Nombre de la campaña<input value={campaignName} onChange={(event) => setCampaignName(event.target.value)} disabled={creating} className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 focus:outline-none focus:border-[#053E68]" /></label><label className="block text-sm font-medium text-gray-700">Proyecto asociado<select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} disabled={creating} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 focus:outline-none focus:border-[#053E68]"><option value="">Seleccione un proyecto</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>{campaignAreaHasSubareas && <label className="block text-sm font-medium text-gray-700">Subárea<select value={selectedSubareaId} onChange={(event) => setSelectedSubareaId(event.target.value)} disabled={creating} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 focus:outline-none focus:border-[#053E68]"><option value="">Seleccione una subárea</option>{selectedAreaSubareas.map((subarea) => <option key={subarea.id} value={subarea.id}>{subarea.name}</option>)}</select></label>}{campaignError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{campaignError}</p>}</div><div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4"><button onClick={() => setShowCampaignForm(false)} disabled={creating} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button><button onClick={createCampaign} disabled={creating} className="inline-flex items-center gap-2 rounded-lg bg-[#053E68] px-4 py-2 text-sm font-medium text-white hover:bg-[#06497c] disabled:opacity-50">{creating && <RefreshCw className="w-4 h-4 animate-spin" />}{creating ? 'Creando...' : 'Crear Campaña'}</button></div></div></div>}
+    {messageSelection && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#053E68]/30 px-4"><div role="dialog" aria-modal="true" aria-labelledby="send-message-title" className="w-full max-w-md rounded-xl bg-white shadow-xl"><div className="flex items-start justify-between border-b border-gray-100 px-6 py-4"><div><h3 id="send-message-title" className="font-bold text-[#053E68]">¿Enviar mensajes?</h3><p className="mt-1 text-sm text-gray-500">Se enviarán recordatorios reales por WhatsApp.</p></div><button disabled={sendingMessages} onClick={() => setMessageSelection(null)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg" aria-label="Cerrar"><X className="w-5 h-5" /></button></div><div className="space-y-2 p-6 text-sm text-slate-600"><p><b className="text-slate-800">{messageSelection.ready.length}</b> mensajes listos para encolar.</p>{messageSelection.unavailable > 0 && <p className="rounded-lg bg-amber-50 p-3 text-amber-800">{messageSelection.unavailable} cliente{messageSelection.unavailable === 1 ? '' : 's'} seleccionado{messageSelection.unavailable === 1 ? '' : 's'} no está{messageSelection.unavailable === 1 ? '' : 'n'} listo{messageSelection.unavailable === 1 ? '' : 's'} y no se incluirá{messageSelection.unavailable === 1 ? '' : 'n'}.</p>}</div><div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4"><button disabled={sendingMessages} onClick={() => setMessageSelection(null)} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700">Cancelar</button><button disabled={sendingMessages} onClick={sendSelectedMessages} className="inline-flex items-center gap-2 rounded-lg bg-[#0B5A8E] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"><Send className="w-4 h-4" />{sendingMessages ? 'Encolando…' : 'Sí, enviar'}</button></div></div></div>}
   </div>;
 }

@@ -63,7 +63,7 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
 
 export default function MessagingQueueView() {
   const { authToken, logout } = useAuth();
-  const [run, setRun] = useState(null);
+  const [runs, setRuns] = useState([]);
   const [deliveries, setDeliveries] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -81,13 +81,13 @@ export default function MessagingQueueView() {
         apiFetch('/api/v1/cobros/reminders/projects', { token: authToken, onUnauthorized: logout }),
       ]);
       if (!runsResponse.ok || !projectsResponse.ok) throw new Error('No se pudieron consultar los mensajes programados.');
-      const [runs, configuredProjects] = await Promise.all([runsResponse.json(), projectsResponse.json()]);
-      const todayRun = (Array.isArray(runs) ? runs : []).find(item => item.run_date === todayInGuatemala()) || null;
+      const [runsPayload, configuredProjects] = await Promise.all([runsResponse.json(), projectsResponse.json()]);
+      const todayRuns = (Array.isArray(runsPayload) ? runsPayload : []).filter(item => item.run_date === todayInGuatemala());
       const todayDeliveries = [];
-      if (todayRun) {
+      for (const run of todayRuns) {
         let offset = 0;
         while (true) {
-          const response = await apiFetch(`/api/v1/cobros/reminders/runs/${todayRun.id}/deliveries?limit=500&offset=${offset}`, { token: authToken, onUnauthorized: logout });
+          const response = await apiFetch(`/api/v1/cobros/reminders/runs/${run.id}/deliveries?limit=500&offset=${offset}`, { token: authToken, onUnauthorized: logout });
           if (!response.ok) throw new Error('No se pudieron cargar las entregas de hoy.');
           const page = await response.json();
           todayDeliveries.push(...page);
@@ -95,7 +95,7 @@ export default function MessagingQueueView() {
           offset += page.length;
         }
       }
-      setRun(todayRun);
+      setRuns(todayRuns);
       setDeliveries(todayDeliveries);
       setProjects(Array.isArray(configuredProjects) ? configuredProjects : []);
       setError('');
@@ -123,12 +123,11 @@ export default function MessagingQueueView() {
     {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-6 py-4"><div><h3 className="font-semibold text-[#053E68]">Mensajes programados y enviados</h3><p className="mt-1 text-sm text-slate-500">Doble clic en un mensaje para ver el texto completo y la imagen.</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{deliveries.length} registros</span></div>
-      {run?.status === 'running' && run.candidates > deliveries.length && <p className="border-b border-amber-100 bg-amber-50 px-6 py-3 text-sm text-amber-800">La ejecución sigue preparando mensajes: {deliveries.length} de {run.candidates} candidatos tienen registro todavía.</p>}
       <div className="overflow-x-auto"><table className="w-full min-w-[900px] table-fixed text-left text-sm"><colgroup><col className="w-[21%]" /><col className="w-[18%]" /><col className="w-[18%]" /><col className="w-[31%]" /><col className="w-[12%]" /></colgroup><thead className="bg-[#053E68] text-white"><tr>{['Cliente', 'Proyecto', 'Lote', 'Mensaje', 'Status'].map(header => <th key={header} className="px-4 py-3 font-semibold">{header}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
         {loading ? <tr><td colSpan="5" className="px-4 py-12 text-center text-slate-500">Cargando mensajes…</td></tr> : deliveries.length ? deliveries.map(delivery => {
           const status = statusOf(delivery);
           return <tr key={delivery.id} className="hover:bg-slate-50"><td className="truncate px-4 py-3 font-medium text-slate-800" title={delivery.nombre_cliente}>{delivery.nombre_cliente || '—'}</td><td className="truncate px-4 py-3 text-slate-700" title={delivery.proyecto}>{delivery.proyecto || '—'}</td><td className="truncate px-4 py-3 text-slate-700" title={lotsOf(delivery)}>{lotsOf(delivery)}</td><td className="px-4 py-3"><button type="button" onDoubleClick={() => setSelected(delivery)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(delivery); } }} title="Doble clic para ver el mensaje completo" className="block w-full min-w-0 truncate rounded px-1 py-1 text-left text-slate-700 hover:bg-blue-50 hover:text-[#053E68]">{delivery.message || 'Mensaje aún no generado'}</button></td><td className="px-4 py-3"><span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${status.className}`}>{status.label}</span></td></tr>;
-        }) : <tr><td colSpan="5" className="px-4 py-12 text-center text-slate-500">{run ? 'La ejecución de hoy aún no tiene mensajes registrados.' : 'Los mensajes aparecerán cuando comience la ejecución diaria.'}</td></tr>}
+        }) : <tr><td colSpan="5" className="px-4 py-12 text-center text-slate-500">{runs.length ? 'Los mensajes del envío manual aún se están preparando.' : 'Aún no se han encolado mensajes hoy.'}</td></tr>}
       </tbody></table></div>
     </section>
     {selected && <MessageDetail delivery={selected} imageUrl={imageUrl} onClose={closeDetail} />}
