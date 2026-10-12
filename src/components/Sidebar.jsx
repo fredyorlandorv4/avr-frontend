@@ -125,6 +125,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
               {settingsOpen && (
                 <div className="mt-1 ml-4 pl-3 space-y-1 border-l border-white/20">
                   <NavLink
+                    end
                     to="/settings"
                     onClick={onClose}
                     className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-[#F4CD04] text-[#053E68] font-semibold' : 'text-blue-100 hover:bg-white/10 hover:text-white'}`}

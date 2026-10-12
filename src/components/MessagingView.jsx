@@ -4,6 +4,10 @@ import { apiFetch } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const initialForm = { company_name: '', project_name: '', evolution_instance: '', active: true, image: null };
+const initialPromptEditors = {
+  collection: { value: '', dirty: false },
+  reminder: { value: '', dirty: false },
+};
 const listFrom = value => Array.isArray(value) ? value : (value?.items || value?.results || value?.data || []);
 const valueOf = (object, keys, fallback = '—') => keys.map(key => object?.[key]).find(value => value !== undefined && value !== null && value !== '') ?? fallback;
 const asBoolean = value => value === true || value === 1 || value === 'true' || value === '1';
@@ -38,7 +42,7 @@ function Toggle({ checked, disabled, onChange, label }) {
 export default function MessagingView() {
   const { authToken, logout } = useAuth();
   const [settings, setSettings] = useState({});
-  const [promptEditor, setPromptEditor] = useState({ value: '', dirty: false });
+  const [promptEditors, setPromptEditors] = useState(initialPromptEditors);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [projects, setProjects] = useState([]);
   const [runs, setRuns] = useState([]);
@@ -64,7 +68,10 @@ export default function MessagingView() {
       if (!runsResponse.ok) throw new Error(await backendError(runsResponse, 'No se pudo cargar el historial.'));
       const [settingsData, projectsData, runsData] = await Promise.all([settingsResponse.json(), projectsResponse.json(), runsResponse.json()]);
       setSettings(settingsData);
-      setPromptEditor(current => current.dirty ? current : { value: settingsData.message_prompt || '', dirty: false });
+      setPromptEditors(current => ({
+        collection: current.collection.dirty ? current.collection : { value: settingsData.collection_prompt || settingsData.message_prompt || '', dirty: false },
+        reminder: current.reminder.dirty ? current.reminder : { value: settingsData.payment_reminder_prompt || '', dirty: false },
+      }));
       setProjects(listFrom(projectsData)); setRuns(listFrom(runsData));
     } catch (requestError) { if (requestError.message !== 'Unauthorized') setError(requestError.message); } finally { if (!quiet) setLoading(false); }
   }, [authToken, logout]);
@@ -76,19 +83,27 @@ export default function MessagingView() {
     return () => window.clearInterval(interval);
   }, [runs, load]);
 
-  const savePrompt = async event => {
+  const savePrompt = async (event, promptType) => {
     event.preventDefault();
-    if (promptEditor.value.length > 4000) { setError('El prompt no puede superar los 4000 caracteres.'); return; }
+    const editor = promptEditors[promptType];
+    const field = promptType === 'collection' ? 'collection_prompt' : 'payment_reminder_prompt';
+    if (editor.value.length > 4000) { setError('El prompt no puede superar los 4000 caracteres.'); return; }
     setSavingPrompt(true); setError('');
     try {
       const response = await apiFetch('/api/v1/cobros/reminders/settings', {
         method: 'PATCH', token: authToken, onUnauthorized: logout,
-        body: { message_prompt: promptEditor.value.trim() || null },
+        body: { [field]: editor.value.trim() || null },
       });
       if (!response.ok) throw new Error(await backendError(response, 'No se pudo guardar el prompt.'));
       const updated = await response.json();
+      if (!Object.prototype.hasOwnProperty.call(updated, field)) {
+        throw new Error('El servidor todavía no admite los prompts separados. Debe exponer collection_prompt y payment_reminder_prompt en la configuración de recordatorios.');
+      }
       setSettings(updated);
-      setPromptEditor({ value: updated.message_prompt || '', dirty: false });
+      setPromptEditors(current => ({
+        ...current,
+        [promptType]: { value: updated[field] || '', dirty: false },
+      }));
     } catch (requestError) { if (requestError.message !== 'Unauthorized') setError(requestError.message); }
     finally { setSavingPrompt(false); }
   };
@@ -130,31 +145,41 @@ export default function MessagingView() {
 
   return <div className="mx-auto max-w-[1440px] space-y-6 pb-8">
     <div className="flex flex-col justify-between gap-4 rounded-2xl bg-gradient-to-r from-[#053E68] to-[#0B5A8E] px-6 py-5 text-white shadow-sm sm:flex-row sm:items-center">
-      <div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><BellRing className="h-6 w-6 text-[#F4CD04]" /></div><div><p className="text-sm font-medium text-blue-100">Gestión de cobros</p><p className="text-lg font-semibold">Recordatorios automáticos de Carmen</p><p className="mt-0.5 text-sm text-blue-100">Configura imágenes e instancias por empresa y proyecto.</p></div></div>
+      <div className="flex items-center gap-4"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><BellRing className="h-6 w-6 text-[#F4CD04]" /></div><div><p className="text-sm font-medium text-blue-100">Gestión de cobros</p><p className="text-lg font-semibold">Mensajería de Carmen</p><p className="mt-0.5 text-sm text-blue-100">Configura los prompts, imágenes e instancias por empresa y proyecto.</p></div></div>
       <button type="button" onClick={() => load()} disabled={loading} className="inline-flex items-center justify-center gap-2 !rounded-xl !border !border-white/25 !bg-white/10 !px-4 !py-2.5 text-sm font-semibold text-white hover:!bg-white/20 disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button>
     </div>
     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><b>No se pudo cargar Mensajería.</b> {error}</div>}
 
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-6 py-5">
-        <h3 className="font-semibold text-[#053E68]">Prompt del mensaje</h3>
-        <p className="mt-1 text-sm text-slate-500">Define la personalidad, el tono y la estructura de los mensajes que genera Carmen.</p>
+        <h3 className="font-semibold text-[#053E68]">Prompts de mensajería</h3>
+        <p className="mt-1 text-sm text-slate-500">Define instrucciones distintas para cobrar saldos vencidos y para recordar pagos próximos.</p>
       </div>
-      <form onSubmit={savePrompt} className="space-y-3 px-6 py-5">
-        <label htmlFor="message-prompt" className="block text-sm font-medium text-slate-700">Instrucciones para Carmen</label>
-        <textarea id="message-prompt" rows={7} maxLength={4000} disabled={loading || savingPrompt}
-          value={promptEditor.value}
-          onChange={event => setPromptEditor({ value: event.target.value, dirty: true })}
-          placeholder="Ej. Usa un tono amable y claro. Saluda al cliente, explica el saldo y cierra con una invitación a comunicarse con nosotros."
-          className="w-full rounded-xl border border-slate-300 p-3 text-sm leading-6 outline-none focus:border-[#0B5A8E] focus:ring-2 focus:ring-[#0B5A8E]/15 disabled:bg-slate-50" />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">{promptEditor.value.length}/4000 caracteres. Si lo dejas vacío, se usa el comportamiento predeterminado.</p>
-          <div className="flex items-center gap-3">
-            {promptEditor.dirty && <button type="button" onClick={() => setPromptEditor({ value: settings.message_prompt || '', dirty: false })} disabled={savingPrompt} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Descartar cambios</button>}
-            <button type="submit" disabled={!promptEditor.dirty || savingPrompt || loading} className="rounded-lg bg-[#053E68] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{savingPrompt ? 'Guardando…' : 'Guardar prompt'}</button>
-          </div>
-        </div>
-      </form>
+      <div className="grid divide-y divide-slate-100 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+        {[{
+          type: 'collection', title: 'Prompt de cobro', description: 'Se usa para pagos vencidos.', placeholder: 'Ej. Comunica que el pago está vencido con un tono cordial, claro y orientado a resolver el saldo.',
+        }, {
+          type: 'reminder', title: 'Prompt de recordatorio de pago', description: 'Se usa para pagos por vencer.', placeholder: 'Ej. Recuerda amablemente la fecha próxima de pago e invita al cliente a realizarlo a tiempo.',
+        }].map(({ type, title, description, placeholder }) => {
+          const editor = promptEditors[type];
+          const field = type === 'collection' ? 'collection_prompt' : 'payment_reminder_prompt';
+          return <form key={type} onSubmit={event => savePrompt(event, type)} className="space-y-3 px-6 py-5">
+            <div><h4 className="text-sm font-semibold text-slate-800">{title}</h4><p className="mt-1 text-xs text-slate-500">{description}</p></div>
+            <label htmlFor={field} className="block text-sm font-medium text-slate-700">Instrucciones para Carmen</label>
+            <textarea id={field} rows={7} maxLength={4000} disabled={loading || savingPrompt} value={editor.value}
+              onChange={event => setPromptEditors(current => ({ ...current, [type]: { value: event.target.value, dirty: true } }))}
+              placeholder={placeholder}
+              className="w-full rounded-xl border border-slate-300 p-3 text-sm leading-6 outline-none focus:border-[#0B5A8E] focus:ring-2 focus:ring-[#0B5A8E]/15 disabled:bg-slate-50" />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">{editor.value.length}/4000 caracteres.</p>
+              <div className="flex items-center gap-3">
+                {editor.dirty && <button type="button" onClick={() => setPromptEditors(current => ({ ...current, [type]: { value: settings[field] || (type === 'collection' ? settings.message_prompt || '' : ''), dirty: false } }))} disabled={savingPrompt} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Descartar</button>}
+                <button type="submit" disabled={!editor.dirty || savingPrompt || loading} className="rounded-lg bg-[#053E68] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{savingPrompt ? 'Guardando…' : 'Guardar'}</button>
+              </div>
+            </div>
+          </form>;
+        })}
+      </div>
     </section>
 
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 px-6 py-5"><h3 className="font-semibold text-[#053E68]">Configuración por empresa y proyecto</h3><p className="mt-1 text-sm text-slate-500">La misma combinación actualiza la imagen bancaria y la instancia existentes.</p></div><form onSubmit={saveProject} className="m-5 grid gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 lg:grid-cols-12"><label className="lg:col-span-3"><span className="mb-1.5 block text-xs font-semibold text-slate-600">Empresa SAP</span><input required placeholder="Ej. RV4" value={form.company_name} onChange={event => setForm(current => ({ ...current, company_name: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 focus:border-[#0B5A8E] focus:ring-2 focus:ring-[#0B5A8E]/15" /></label><label className="lg:col-span-3"><span className="mb-1.5 block text-xs font-semibold text-slate-600">Proyecto SAP</span><input required placeholder="Ej. Cobros" value={form.project_name} onChange={event => setForm(current => ({ ...current, project_name: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 focus:border-[#0B5A8E] focus:ring-2 focus:ring-[#0B5A8E]/15" /></label><label className="lg:col-span-3"><span className="mb-1.5 block text-xs font-semibold text-slate-600">Instancia Evolution</span><input required placeholder="Nombre de instancia" value={form.evolution_instance} onChange={event => setForm(current => ({ ...current, evolution_instance: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 focus:border-[#0B5A8E] focus:ring-2 focus:ring-[#0B5A8E]/15" /></label><label className="lg:col-span-3"><span className="mb-1.5 block text-xs font-semibold text-slate-600">Imagen bancaria</span><span className="flex h-[42px] items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 text-sm text-slate-500"><FileImage className="h-4 w-4 text-[#0B5A8E]" /><input ref={fileInput} required type="file" accept="image/jpeg,image/png,image/webp" onChange={event => setForm(current => ({ ...current, image: event.target.files?.[0] || null }))} className="min-w-0 text-xs file:mr-2 file:border-0 file:bg-transparent file:font-medium file:text-[#053E68]" /></span></label><div className="flex items-center justify-between gap-4 lg:col-span-12"><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={form.active} onChange={event => setForm(current => ({ ...current, active: event.target.checked }))} className="h-4 w-4 rounded accent-[#0B5A8E]" />Configuración activa</label><button disabled={saving} className="!rounded-lg !bg-[#053E68] !px-5 !py-2.5 text-sm font-semibold text-white hover:!bg-[#0B5A8E] disabled:opacity-60">Guardar configuración</button></div></form><div className="overflow-x-auto px-5 pb-5"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">{['Empresa + proyecto', 'Instancia', 'Archivo', 'Estado', 'Vista previa', 'Acciones'].map(header => <th key={header} className="px-3 py-3 font-semibold">{header}</th>)}</tr></thead><tbody>{projects.map(project => <tr key={project.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50"><td className="px-3 py-3 font-medium text-slate-800">{valueOf(project, ['company_name'])}<span className="mx-1.5 text-slate-300">/</span>{valueOf(project, ['project_name'])}</td><td className="px-3 py-3 text-slate-600">{valueOf(project, ['evolution_instance'])}</td><td className="px-3 py-3 text-slate-600">{valueOf(project, ['image_filename', 'file_name'], 'Imagen')}</td><td className="px-3 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${asBoolean(project.active) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{asBoolean(project.active) ? 'Activa' : 'Inactiva'}</span></td><td className="px-3 py-3"><ImagePreview key={valueOf(project, ['image_url'], '')} imageUrl={valueOf(project, ['image_url'], '')} /></td><td className="px-3 py-3"><div className="flex items-center gap-3"><Toggle label={asBoolean(project.active) ? 'Desactivar configuración' : 'Activar configuración'} checked={asBoolean(project.active)} onChange={active => updateProject(project, 'PATCH', { active })} /><button type="button" aria-label="Eliminar configuración" onClick={() => updateProject(project, 'DELETE')} className="!p-2 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button></div></td></tr>)}{!loading && projects.length === 0 && <tr><td colSpan="6" className="px-3 py-10 text-center text-slate-500">Aún no hay configuraciones registradas.</td></tr>}</tbody></table></div></section>
