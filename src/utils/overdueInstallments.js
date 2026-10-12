@@ -24,7 +24,7 @@ export function groupOverdueInstallments(installments) {
   const groups = new Map();
 
   installments.forEach((installment, index) => {
-    const dueDate = field(installment, ['fecha_compromiso', 'fecha_vencimiento']);
+    const dueDate = field(installment, ['fecha_pago', 'fecha_compromiso', 'fecha_vencimiento']);
     const date = validDate(dueDate);
     const key = date ? `${date.year}-${String(date.month).padStart(2, '0')}` : `sin-fecha-${index}`;
     const balance = Number(field(installment, ['total_a_pagar', 'saldo', 'monto_pendiente'], 0)) || 0;

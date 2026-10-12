@@ -21,6 +21,20 @@ const amount = (source, keys) => Number(value(source, keys, 0)) || 0;
 const clientIdentity = value => String(value || '').trim().toLocaleLowerCase('es-GT');
 const searchable = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
+const guatemalaToday = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guatemala', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date()).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+  return Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+};
+
+const daysUntilPayment = (dueDate) => {
+  const match = String(dueDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const dueAt = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Math.round((dueAt - guatemalaToday()) / 86_400_000);
+};
+
 const normalizeClients = (payload) => {
   const clients = Array.isArray(payload)
     ? payload
@@ -82,6 +96,7 @@ export default function OverduePortfolioView() {
   const [messageSuccess, setMessageSuccess] = useState('');
   const [clientQuery, setClientQuery] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('all');
 
   const load = useCallback(async () => {
     if (!authToken) return;
@@ -113,9 +128,13 @@ export default function OverduePortfolioView() {
     return clients.filter(client => {
       const matchesText = !query || [client.name, client.phone, client.code].some(item => searchable(item).includes(query));
       const matchesProject = !projectFilter || client.lots.some(lot => lot.project === projectFilter);
-      return matchesText && matchesProject;
+      const matchesPaymentStatus = paymentFilter === 'all' || client.lots.some((lot) => lot.installments.some((installment) => {
+        const days = daysUntilPayment(installment.dueDate);
+        return paymentFilter === 'upcoming' ? days !== null && days >= 0 && days <= 3 : days !== null && days < 0;
+      }));
+      return matchesText && matchesProject && matchesPaymentStatus;
     });
-  }, [clients, clientQuery, projectFilter]);
+  }, [clients, clientQuery, projectFilter, paymentFilter]);
   const cobrosArea = areas.find((area) => String(area.area || '').trim().toLowerCase() === 'cobros');
   const campaignAreaId = isSystem ? cobrosArea?.id : areaId;
 
@@ -273,9 +292,10 @@ export default function OverduePortfolioView() {
       {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       {messageError && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{messageError}</p>}
       {messageSuccess && <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{messageSuccess}</p>}
-      <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_260px]">
+      <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px_180px]">
         <label className="text-sm font-medium text-gray-700">Buscar cliente o número<input type="search" value={clientQuery} onChange={event => setClientQuery(event.target.value)} placeholder="Nombre, teléfono o código" className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 font-normal outline-none focus:border-[#053E68]" /></label>
         <label className="text-sm font-medium text-gray-700">Proyecto<select value={projectFilter} onChange={event => setProjectFilter(event.target.value)} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-[#053E68]"><option value="">Todos los proyectos</option>{projectOptions.map(project => <option key={project} value={project}>{project}</option>)}</select></label>
+        <label className="text-sm font-medium text-gray-700">Estado de pago<select value={paymentFilter} onChange={event => setPaymentFilter(event.target.value)} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-[#053E68]"><option value="all">Todos</option><option value="upcoming">Por Vencer</option><option value="overdue">Vencidos</option></select></label>
       </div>
     </section>
 
