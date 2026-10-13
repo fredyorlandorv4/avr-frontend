@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, RefreshCw, Phone, Send, WalletCards, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
@@ -97,6 +97,7 @@ export default function OverduePortfolioView() {
   const [clientQuery, setClientQuery] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
+  const selectAllRef = useRef(null);
 
   const load = useCallback(async () => {
     if (!authToken) return;
@@ -135,6 +136,12 @@ export default function OverduePortfolioView() {
       return matchesText && matchesProject && matchesPaymentStatus;
     });
   }, [clients, clientQuery, projectFilter, paymentFilter]);
+  const allVisibleSelected = visibleClients.length > 0 && visibleClients.every((client) => selectedClientIds.has(client.id));
+  const someVisibleSelected = visibleClients.some((client) => selectedClientIds.has(client.id));
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+  }, [someVisibleSelected, allVisibleSelected]);
   const cobrosArea = areas.find((area) => String(area.area || '').trim().toLowerCase() === 'cobros');
   const campaignAreaId = isSystem ? cobrosArea?.id : areaId;
 
@@ -175,6 +182,12 @@ export default function OverduePortfolioView() {
   });
 
   const toggleClient = (clientId) => toggle(setSelectedClientIds, clientId);
+  const toggleVisibleClients = () => setSelectedClientIds((current) => {
+    const next = new Set(current);
+    if (allVisibleSelected) visibleClients.forEach((client) => next.delete(client.id));
+    else visibleClients.forEach((client) => next.add(client.id));
+    return next;
+  });
   const selectedAreaSubareas = subareas.filter((subarea) => String(subarea.area || '').trim().toLowerCase() === 'cobros');
   const campaignAreaHasSubareas = isSystem ? Boolean(cobrosArea?.subareas) : selectedAreaSubareas.length > 0;
 
@@ -301,7 +314,7 @@ export default function OverduePortfolioView() {
 
     {loading ? <section className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400">Cargando cartera vencida...</section>
       : !error && clients.length === 0 ? <section className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-500">No hay saldos vencidos para mostrar.</section>
-      : <section className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr>{['', 'Cliente', 'Teléfono principal', 'Cuotas atrasadas', 'Total pendiente', ''].map((header, index) => <th key={`${header}-${index}`} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{visibleClients.map((client) => {
+      : <section className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-[#053E68] text-white"><tr><th className="px-4 py-3 font-semibold whitespace-nowrap"><input ref={selectAllRef} type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleClients} disabled={visibleClients.length === 0} aria-label={allVisibleSelected ? 'Deseleccionar todos los registros visibles' : 'Seleccionar todos los registros visibles'} className="h-4 w-4 accent-[#053E68] disabled:cursor-not-allowed" /></th>{['Cliente', 'Teléfono principal', 'Cuotas atrasadas', 'Total pendiente', ''].map((header, index) => <th key={`${header}-${index}`} className="px-4 py-3 font-semibold whitespace-nowrap">{header}</th>)}</tr></thead><tbody className="divide-y divide-gray-100">{visibleClients.map((client) => {
         const clientExpanded = expandedClients.has(client.id);
         return <><tr key={client.id} className="hover:bg-gray-50"><td className="px-4 py-4"><input type="checkbox" checked={selectedClientIds.has(client.id)} onChange={() => toggleClient(client.id)} aria-label={`Seleccionar ${client.name}`} className="h-4 w-4 accent-[#053E68]" /></td><td className="px-4 py-4"><p className="font-semibold text-[#053E68]">{client.name}</p><p className="text-xs text-gray-500 mt-0.5">{[client.company, client.code].filter(Boolean).join(' · ') || 'Sin empresa o código registrado'}</p></td><td className="px-4 py-4 text-gray-700 whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><Phone className="w-4 h-4 text-gray-400" />{client.phone}</span></td><td className="px-4 py-4 font-medium text-center">{client.overdueInstallments}</td><td className="px-4 py-4 font-semibold text-[#053E68] whitespace-nowrap">{currency.format(client.pendingTotal)}</td><td className="px-4 py-4"><button onClick={() => toggle(setExpandedClients, client.id)} aria-label={`Ver lotes de ${client.name}`} className="p-1.5 rounded hover:bg-[#053E68]/10 text-[#053E68]">{clientExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}</button></td></tr>
           {clientExpanded && <tr key={`${client.id}-lots`}><td colSpan="6" className="p-4 bg-gray-50"><div className="space-y-3">

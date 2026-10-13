@@ -77,8 +77,8 @@ function initialValues(fields = []) {
 
 // Algunos agentes exponen un dato operativo y la variable equivalente del
 // prompt (por ejemplo, "Nombre" y "Prompt nombre"). Ambos deben viajar al
-// backend, pero pedirlos dos veces resulta confuso. Se identifica la segunda
-// variante por su etiqueta para mostrar solo un control y sincronizar valores.
+// backend, pero pedirlos dos veces resulta confuso. Se identifican por su
+// etiqueta para mostrar un solo control y sincronizar todos los paths.
 function promptFieldKey(label = "") {
   return label
     .normalize("NFD")
@@ -90,26 +90,42 @@ function promptFieldKey(label = "") {
 }
 
 function fieldsForTestForm(fields = []) {
-  const visible = [];
-  const fieldsByKey = new Map();
+  const groups = new Map();
 
-  fields.forEach((field) => {
-    const key = promptFieldKey(field.label);
-    const isPromptField = /^prompt\b/i.test(field.label?.trim() || "");
-    const original = fieldsByKey.get(key);
-
-    if (isPromptField && original) {
-      original.syncedPaths.push(field.path);
-      return;
-    }
-
-    const displayField = { ...field, syncedPaths: [field.path] };
-    visible.push(displayField);
-    // Solo los campos base pueden absorber su equivalente "Prompt ...".
-    if (!isPromptField) fieldsByKey.set(key, displayField);
+  fields.forEach((field, index) => {
+    const label = field.label?.trim() || "";
+    const key = promptFieldKey(label);
+    const isPromptField = /^prompt\b/i.test(label);
+    // Una etiqueta vacía no aporta una identidad fiable para deduplicar.
+    const groupKey = key ? key : `path:${field.path}`;
+    const group = groups.get(groupKey) || [];
+    group.push({ field, index, isPromptField });
+    groups.set(groupKey, group);
   });
 
-  return visible;
+  return [...groups.values()]
+    .map((group) => {
+      const promptFields = group.filter(({ isPromptField }) => isPromptField);
+      // Solo se unen grupos que incluyen una variable de prompt. Así los
+      // campos operativos con una etiqueta coincidente se conservan cuando no
+      // existe una equivalencia de prompt que los relacione.
+      if (!promptFields.length || group.length === 1)
+        return group.map(({ field, index }) => ({
+          ...field,
+          index,
+          syncedPaths: [field.path],
+        }));
+
+      const baseField = group.find(({ isPromptField }) => !isPromptField);
+      const display = baseField || promptFields[0];
+      return [{
+        ...display.field,
+        index: Math.min(...group.map(({ index }) => index)),
+        syncedPaths: group.map(({ field }) => field.path),
+      }];
+    })
+    .flat()
+    .sort((a, b) => a.index - b.index);
 }
 
 function setPath(target, path, value) {
