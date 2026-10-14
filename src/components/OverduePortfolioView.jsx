@@ -20,6 +20,7 @@ const value = (source, keys, fallback = '') => {
 const amount = (source, keys) => Number(value(source, keys, 0)) || 0;
 const clientIdentity = value => String(value || '').trim().toLocaleLowerCase('es-GT');
 const searchable = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const listFrom = value => Array.isArray(value) ? value : (value?.items || value?.results || value?.data || []);
 
 const guatemalaToday = () => {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -248,11 +249,13 @@ export default function OverduePortfolioView() {
       const response = await apiFetch('/api/v1/cobros/reminders/candidates', { token: authToken, onUnauthorized: logout });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || 'No se pudieron consultar los candidatos para Mensajería.');
+      const selectedIds = new Set(selectedClients.map(client => clientIdentity(client.id)).filter(Boolean));
       const selectedCodes = new Set(selectedClients.map(client => clientIdentity(client.code)).filter(Boolean));
       const selectedNames = new Set(selectedClients.map(client => clientIdentity(client.name)).filter(Boolean));
-      const matching = (Array.isArray(payload) ? payload : []).filter(candidate => (
-        selectedCodes.has(clientIdentity(candidate.customer_code))
-        || selectedNames.has(clientIdentity(candidate.customer_name))
+      const matching = listFrom(payload).filter(candidate => (
+        [candidate.customer_id, candidate.client_id, candidate.id].some(id => selectedIds.has(clientIdentity(id)))
+        || [candidate.customer_code, candidate.client_code, candidate.codigo_cliente].some(code => selectedCodes.has(clientIdentity(code)))
+        || [candidate.customer_name, candidate.client_name, candidate.cliente].some(name => selectedNames.has(clientIdentity(name)))
       ));
       const ready = matching.filter(candidate => candidate.send_ready);
       if (!ready.length) {
