@@ -60,7 +60,7 @@ function statusOf(delivery) {
 function MessageDetail({ delivery, imageUrl, onClose }) {
   const { authToken, logout } = useAuth();
   const [imageSource, setImageSource] = useState("");
-  const [imageFailed, setImageFailed] = useState(false);
+  const [imageError, setImageError] = useState("");
 
   useEffect(() => {
     if (!imageUrl) return undefined;
@@ -69,14 +69,15 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
     apiFetch(imageUrl, { token: authToken, onUnauthorized: logout })
       .then(async (response) => {
         if (!response.ok) {
-          if (active) setImageFailed(true);
+          const payload = await response.json().catch(() => ({}));
+          if (active) setImageError(typeof payload.detail === "string" ? payload.detail : `No se pudo cargar la imagen (HTTP ${response.status}).`);
           return;
         }
         objectUrl = URL.createObjectURL(await response.blob());
         if (active) setImageSource(objectUrl);
       })
-      .catch(() => {
-        if (active) setImageFailed(true);
+      .catch((error) => {
+        if (active) setImageError(error.message === "Unauthorized" ? "La sesión expiró al cargar la imagen." : "No se pudo conectar para cargar la imagen.");
       });
     return () => {
       active = false;
@@ -131,18 +132,26 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
             {imageSource ? (
               <img
                 src={imageSource}
-                alt="Imagen configurada para el recordatorio"
+                alt={delivery.image_is_snapshot ? "Imagen adjunta a este envío" : "Imagen de la configuración actual"}
                 className="max-h-72 w-full rounded-lg border border-slate-200 bg-white object-contain"
               />
             ) : (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                {imageUrl && !imageFailed
-                  ? "Cargando imagen…"
-                  : "Imagen no disponible"}
+                {imageError || (imageUrl ? "Cargando imagen…" : "No se conserva una imagen para este envío.")}
               </div>
             )}
           </div>
           <div className="min-w-0">
+            <div className="mb-4 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <p>Estado: <b>{statusOf(delivery).label}</b></p>
+              <p>Destino: {delivery.telefono || "Sin teléfono registrado"}</p>
+              <p>Instancia: {delivery.evolution_instance || "Sin instancia registrada"}</p>
+              <p className="break-all">ID de Evolution: {delivery.evolution_message_id || "Todavía no registrado"}</p>
+              {delivery.sent_at && <p>Fecha de envío: {new Date(delivery.sent_at).toLocaleString("es-GT", { timeZone: "America/Guatemala" })}</p>}
+              {delivery.status === "accepted" && <p className="text-xs text-slate-500">Evolution aceptó el envío. No hay confirmación de entrega o lectura registrada.</p>}
+              {delivery.error_message && <p className="text-red-700">Error: {delivery.error_message}</p>}
+              {!delivery.image_is_snapshot && imageSource && <p className="text-xs text-slate-500">Imagen de la configuración actual. Este histórico no conserva una copia de la imagen enviada.</p>}
+            </div>
             <h3 className="mb-2 text-sm font-semibold text-slate-700">
               Mensaje completo
             </h3>
@@ -248,7 +257,9 @@ export default function MessagingQueueView() {
     [projects],
   );
   const imageUrl = selected
-    ? selected.image_url || imagesByProject.get(keyOf(selected.empresa, selected.proyecto)) ||
+    ? selected.image_url ||
+      (selected.project_config_id ? `/api/v1/cobros/reminders/projects/${selected.project_config_id}/image` : null) ||
+      imagesByProject.get(keyOf(selected.empresa, selected.proyecto)) ||
       (selected.empresa
         ? `/api/v1/cobros/reminders/project-image?${new URLSearchParams({ company_name: selected.empresa, project_name: selected.proyecto || "" })}`
         : null)
@@ -400,6 +411,7 @@ export default function MessagingQueueView() {
       </section>
       {selected && (
         <MessageDetail
+          key={`${selected.id}:${imageUrl}`}
           delivery={selected}
           imageUrl={imageUrl}
           onClose={closeDetail}
