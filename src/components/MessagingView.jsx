@@ -113,6 +113,7 @@ export default function MessagingView() {
   const [expandedRuns, setExpandedRuns] = useState(new Set());
   const [deliveries, setDeliveries] = useState({});
   const fileInput = useRef(null);
+  const projectFormRef = useRef(null);
 
   const load = useCallback(
     async (quiet = false) => {
@@ -328,6 +329,10 @@ export default function MessagingView() {
       image: null,
     });
     if (fileInput.current) fileInput.current.value = "";
+    window.requestAnimationFrame(() => {
+      projectFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      projectFormRef.current?.querySelector('input[name="company_name"]')?.focus();
+    });
   };
 
   const cancelProjectEdit = () => {
@@ -520,14 +525,21 @@ export default function MessagingView() {
           </p>
         </div>
         <form
+          ref={projectFormRef}
           onSubmit={saveProject}
           className="m-5 grid gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 lg:grid-cols-12"
         >
+          {editingProject && (
+            <div className="lg:col-span-12 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-[#053E68]">
+              Editando <b>{valueOf(editingProject, ["company_name"])} / {valueOf(editingProject, ["project_name"])}</b>. Puedes conservar la imagen actual o cargar una nueva.
+            </div>
+          )}
           <label className="lg:col-span-3">
             <span className="mb-1.5 block text-xs font-semibold text-slate-600">
               Empresa SAP
             </span>
             <input
+              name="company_name"
               required
               placeholder="Ej. RV4"
               value={form.company_name}
@@ -582,7 +594,7 @@ export default function MessagingView() {
               <FileImage className="h-4 w-4 text-[#0B5A8E]" />
               <input
                 ref={fileInput}
-                required
+                required={!editingProject}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 onChange={(event) =>
