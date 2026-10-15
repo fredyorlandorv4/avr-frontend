@@ -15,11 +15,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useArea } from "../context/AreaContext.jsx";
 import { groupOverdueInstallments } from "../utils/overdueInstallments.js";
 import { portfolioClientId } from "../utils/accessScopes.js";
-
-const currency = new Intl.NumberFormat("es-GT", {
-  style: "currency",
-  currency: "GTQ",
-});
+import { portfolioCurrency, formatPortfolioMoney } from "../utils/portfolioMoney.js";
 
 const value = (source, keys, fallback = "") => {
   for (const key of keys) {
@@ -105,6 +101,7 @@ const normalizeClients = (payload) => {
       : [];
     return {
       source: client.tipo_cartera || 'lotes',
+      currency: portfolioCurrency(client),
       id: portfolioClientId(client, clientIndex),
       name: value(
         client,
@@ -347,6 +344,10 @@ export default function OverduePortfolioView() {
   };
 
   const createCampaign = async () => {
+    if (selectedClients.some(client => client.currency === 'USD')) {
+      setCampaignError('Las campañas de cobros actuales trabajan en quetzales. No se pueden incluir registros en dólares de Edificios.');
+      return;
+    }
     if (!campaignName.trim()) {
       setCampaignError("Ingrese un nombre para la campaña.");
       return;
@@ -701,7 +702,7 @@ export default function OverduePortfolioView() {
                           {client.overdueInstallments}
                         </td>
                         <td className="px-4 py-4 font-semibold text-[#053E68] whitespace-nowrap">
-                          {currency.format(client.pendingTotal)}
+                          {formatPortfolioMoney(client.pendingTotal, client.currency)}
                         </td>
                         <td className="px-4 py-4">
                           <button
@@ -761,7 +762,7 @@ export default function OverduePortfolioView() {
                                           Pendiente
                                         </span>
                                         <span className="font-semibold text-right text-[#053E68]">
-                                          {currency.format(lot.pendingTotal)}
+                                          {formatPortfolioMoney(lot.pendingTotal, client.currency)}
                                         </span>
                                       </div>
                                     </button>
@@ -805,9 +806,7 @@ export default function OverduePortfolioView() {
                                                       {installment.age}
                                                     </td>
                                                     <td className="px-4 py-3 font-medium whitespace-nowrap">
-                                                      {currency.format(
-                                                        installment.total,
-                                                      )}
+                                                      {formatPortfolioMoney(installment.total, client.currency)}
                                                     </td>
                                                   </tr>
                                                 ),
