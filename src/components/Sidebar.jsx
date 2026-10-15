@@ -4,7 +4,6 @@ import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Bri
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_ONLY = new Set(['prompts', 'agent-call-tests', 'users']);
-const ADMIN_OR_SUPERVISOR = new Set(['overdue-portfolio']);
 // El área de marketing (telemarketing) no accede a proyectos.
 const TELEMARKETING_HIDDEN = new Set(['projects']);
 
@@ -25,7 +24,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ sidebarOpen, onClose }) {
 
-  const { logout, isAdmin, username, role, areaName, isSystem } = useAuth();
+  const { logout, isAdmin, username, role, areaName, isSystem, sapSources } = useAuth();
   const { pathname } = useLocation();
   const [settingsOpen, setSettingsOpen] = useState(() => pathname === '/settings' || pathname === '/settings/messaging');
 
@@ -40,8 +39,8 @@ export default function Sidebar({ sidebarOpen, onClose }) {
 
   const visibleItems = NAV_ITEMS.filter(({ id }) => {
     if (ADMIN_ONLY.has(id) && !isAdmin) return false;
-    if (ADMIN_OR_SUPERVISOR.has(id) && !['admin', 'supervisor'].includes(role)) return false;
-    if (id === 'messaging' && !(isAdmin || (role === 'supervisor' && (areaName || '').trim().toLowerCase() === 'cobros'))) return false;
+    if (id === 'messaging' && !(isAdmin || (role === 'supervisor' && sapSources.includes('lotes')))) return false;
+    if (id === 'overdue-portfolio' && !isAdmin && !sapSources.length) return false;
     if (isTelemarketing && TELEMARKETING_HIDDEN.has(id)) return false;
     return true;
   });

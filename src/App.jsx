@@ -246,13 +246,13 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
 // ─── App shell (holds shared state + data loaders, defines routes) ────────────
 
 function AppShell() {
-  const { authToken, isLoggedIn, logout, isAdmin, isSystem, areaName, role } = useAuth();
+  const { authToken, isLoggedIn, logout, isAdmin, isSystem, areaName, role, sapSources } = useAuth();
   const { areas, scope } = useArea();
 
   // Restricciones del área de marketing (telemarketing): no crea campañas
   // por Excel ni accede a proyectos. Sí accede a follow-ups.
   const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
-  const canViewMessaging = isAdmin || (role === 'supervisor' && (areaName || '').trim().toLowerCase() === 'cobros');
+  const canViewMessaging = isAdmin || (role === 'supervisor' && sapSources.includes('lotes'));
   const canCreateCampaigns = !isTelemarketing;
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -315,7 +315,9 @@ function AppShell() {
     }
   }, [isSystem, followUpAreaId, followUpAreas]);
 
-  const followUpAreaParam = (isSystem && followUpAreaId != null) ? `&area_id=${followUpAreaId}` : '';
+  const followUpAreaParam = isSystem
+    ? (followUpAreaId != null ? `&area_id=${followUpAreaId}` : '')
+    : areaParam;
 
   // --- Helpers ---
 
@@ -377,7 +379,7 @@ function AppShell() {
       : `/api/v1/campaigns/contacts_by_campaing/${campaignId}`;
     setLoading(true);
     try {
-      const res = await apiFetch(url, {
+      const res = await apiFetch(`${url}?${areaParam.replace(/^&/, '')}`, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -393,7 +395,7 @@ function AppShell() {
     } finally {
       setLoading(false);
     }
-  }, [authToken, logout]);
+  }, [authToken, logout, areaParam]);
 
   const loadFollowUps = useCallback(async () => {
     if (!authToken) return;
@@ -425,7 +427,7 @@ function AppShell() {
     if (!authToken || !campaignId) return;
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/v1/campaigns/campaigns/${campaignId}/start-queue`, {
+      const res = await apiFetch(`/api/v1/campaigns/campaigns/${campaignId}/start-queue?${areaParam.replace(/^&/, '')}`, {
         method: 'POST',
         token: authToken,
         onUnauthorized: logout,
@@ -444,7 +446,7 @@ function AppShell() {
     } finally {
       setLoading(false);
     }
-  }, [authToken, logout, loadCampaigns, showToast]);
+  }, [authToken, logout, areaParam, loadCampaigns, showToast]);
 
   const toggleFollowUpCompletion = useCallback(async (followUpId) => {
     const followUp = followUps.find(fu => fu.id === followUpId);
@@ -459,7 +461,7 @@ function AppShell() {
     showToast(previousState ? 'Follow-up marcado como pendiente' : '✓ Follow-up completado', previousState ? 'info' : 'success');
 
     try {
-      const res = await apiFetch(`/api/v1/follow-ups/${followUpId}/complete`, {
+      const res = await apiFetch(`/api/v1/follow-ups/${followUpId}/complete?${followUpAreaParam.replace(/^&/, '')}`, {
         method: 'PATCH',
         token: authToken,
         onUnauthorized: logout,
@@ -483,7 +485,7 @@ function AppShell() {
         showToast('Error de conexión al actualizar el follow-up', 'error');
       }
     }
-  }, [authToken, logout, followUps, loadFollowUps, loadFollowUpStats, showToast]);
+  }, [authToken, logout, followUpAreaParam, followUps, loadFollowUps, loadFollowUpStats, showToast]);
 
   // --- Effects ---
 
@@ -557,7 +559,7 @@ function AppShell() {
           <Route path="/reports" element={<ReportsView />} />
 
           <Route path="/consulta-sap" element={
-            ['admin', 'supervisor'].includes(role) ? <OverduePortfolioView /> : <Navigate to="/dashboard" replace />
+            (isAdmin || sapSources.length > 0) ? <OverduePortfolioView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="/campaigns" element={

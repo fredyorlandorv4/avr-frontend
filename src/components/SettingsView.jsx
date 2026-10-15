@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import { Layers, RefreshCw, Phone, Plus, X, Check, Pencil } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
+import SapSourceOptions from './SapSourceOptions.jsx';
 
 const inputCls =
   'w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#053E68] text-base transition disabled:bg-gray-100 disabled:cursor-not-allowed';
 
 const EMPTY_DID  = { did: '', label: '', area_id: '', subarea: '', status: true };
-const EMPTY_AREA = { area: '', description: '' };
-const EMPTY_SUB  = { name: '', area_id: '' };
+const EMPTY_AREA = { area: '', description: '', sap_sources: [] };
+const EMPTY_SUB  = { name: '', area_id: '', sap_sources: [] };
 
 export default function SettingsView() {
   const { authToken, logout } = useAuth();
@@ -89,7 +90,7 @@ export default function SettingsView() {
   };
   const openAreaEdit = (a) => {
     setAreaEditing(a);
-    setAreaForm({ area: a.area || '', description: a.description || '' });
+    setAreaForm({ area: a.area || '', description: a.description || '', sap_sources: a.sap_sources || [] });
     setAreaError('');
     setAreaModalOpen(true);
   };
@@ -105,6 +106,7 @@ export default function SettingsView() {
     const body = {
       area:        areaForm.area.trim(),
       description: areaForm.description.trim(),
+      sap_sources: areaForm.sap_sources || [],
     };
 
     setAreaSaving(true);
@@ -134,7 +136,7 @@ export default function SettingsView() {
     setSubEditing(s);
     // El listado trae el área por nombre; se resuelve su id para preseleccionarla.
     const parent = areas.find((a) => (a.area || '').trim().toLowerCase() === (s.area || '').trim().toLowerCase());
-    setSubForm({ name: s.name || '', area_id: parent ? String(parent.id) : '' });
+    setSubForm({ name: s.name || '', area_id: s.area_id != null ? String(s.area_id) : (parent ? String(parent.id) : ''), sap_sources: s.sap_sources || [] });
     setSubError('');
     setSubModalOpen(true);
   };
@@ -145,7 +147,7 @@ export default function SettingsView() {
     if (!subForm.name.trim()) { setSubError('El nombre de la subárea es obligatorio.'); return; }
     if (!subForm.area_id)     { setSubError('Selecciona un área.'); return; }
 
-    const body = { name: subForm.name.trim(), area_id: Number(subForm.area_id) };
+    const body = { name: subForm.name.trim(), area_id: Number(subForm.area_id), sap_sources: subForm.sap_sources || [] };
 
     setSubSaving(true);
     try {
@@ -548,6 +550,7 @@ export default function SettingsView() {
                   placeholder="Descripción del área" />
                 <p className="text-xs text-gray-400 mt-1.5">Máximo 255 caracteres.</p>
               </div>
+              <SapSourceOptions value={areaForm.sap_sources} disabled={areaSaving} onChange={sources => setAreaForm(current => ({ ...current, sap_sources: sources }))} />
             </div>
 
             <div className="flex gap-2 mt-6">
@@ -612,6 +615,7 @@ export default function SettingsView() {
                   {areas.map((a) => <option key={a.id} value={a.id}>{a.area}</option>)}
                 </select>
               </div>
+              <SapSourceOptions value={subForm.sap_sources} disabled={subSaving} onChange={sources => setSubForm(current => ({ ...current, sap_sources: sources }))} />
             </div>
 
             <div className="flex gap-2 mt-6">

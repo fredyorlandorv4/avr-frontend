@@ -241,6 +241,7 @@ export default function ReportsView() {
         date_to: new Date(Date.parse(`${dateEnd || today()}T00:00:00Z`) + 86400000).toISOString().slice(0, 10),
       });
       if (scope.areaId != null) params.set('area_id', String(scope.areaId));
+      if (scope.subarea) params.set('subarea', scope.subarea);
       userRequests.push(apiFetch(`/api/v1/dashboard/agents/stats?${params}`, { token: authToken, onUnauthorized: logout }));
     }
     const userResponses = await Promise.allSettled(userRequests);
@@ -259,6 +260,7 @@ export default function ReportsView() {
     while (true) {
       const params = new URLSearchParams({ skip: String(skip), limit: '100', fecha_inicio: '2000-01-01', fecha_fin: today() });
       if (scope.areaId != null) params.set('area_id', String(scope.areaId));
+      if (scope.subarea) params.set('subarea', scope.subarea);
       const campaignsResponse = await apiFetch(`/api/v1/campaigns?${params.toString()}`, { token: authToken, onUnauthorized: logout });
       if (!campaignsResponse.ok) break;
 
@@ -270,7 +272,7 @@ export default function ReportsView() {
 
       for (const campaign of cobrosCampaigns) {
         try {
-          const contactsResponse = await apiFetch(`/api/v1/campaigns/contacts_by_campaing/${campaign.id}`, { token: authToken, onUnauthorized: logout });
+          const contactsResponse = await apiFetch(`/api/v1/campaigns/contacts_by_campaing/${campaign.id}?${params.toString()}`, { token: authToken, onUnauthorized: logout });
           if (!contactsResponse.ok) {
             console.warn(`No se pudieron cargar contactos para campaña ${campaign.id}: ${contactsResponse.status}`);
             continue;
@@ -299,7 +301,7 @@ export default function ReportsView() {
     }
 
     return { lotsByCallId, creatorsByCallId };
-  }, [authToken, logout, isAdmin, dateStart, dateEnd, scope.areaId]);
+  }, [authToken, logout, isAdmin, dateStart, dateEnd, scope.areaId, scope.subarea]);
 
   const fetchFollowUps = useCallback(async () => {
     const all = [];

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { apiFetch } from '../api.js';
 
 const AuthContext = createContext(null);
 
@@ -14,10 +15,13 @@ export function AuthProvider({ children }) {
   const [areaName, setAreaName] = useState(() => localStorage.getItem('areaName') || '');
   // Si el usuario pertenece al área "system" puede filtrar/ver cualquier área.
   const [isSystem, setIsSystem] = useState(() => localStorage.getItem('isSystem') === 'true');
+  const [access, setAccess] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('accessProfile') || 'null'); } catch { return null; }
+  });
 
   const isAdmin = role === 'admin';
 
-  const login = useCallback((token, uname, userRole = '', userAreaId = null, userIsSystem = false, userAreaName = '') => {
+  const login = useCallback((token, uname, userRole = '', userAreaId = null, userIsSystem = false, userAreaName = '', profile = null) => {
     localStorage.setItem('authToken', token);
     localStorage.setItem('username', uname);
     localStorage.setItem('role', userRole);
@@ -31,6 +35,8 @@ export function AuthProvider({ children }) {
     setAreaId(userAreaId != null ? Number(userAreaId) : null);
     setAreaName(userAreaName || '');
     setIsSystem(!!userIsSystem);
+    setAccess(profile);
+    localStorage.setItem('accessProfile', JSON.stringify(profile));
   }, []);
 
   const logout = useCallback(() => {
@@ -40,6 +46,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('areaId');
     localStorage.removeItem('areaName');
     localStorage.removeItem('isSystem');
+    localStorage.removeItem('accessProfile');
     setAuthToken(null);
     setIsLoggedIn(false);
     setUsername('');
@@ -47,10 +54,25 @@ export function AuthProvider({ children }) {
     setAreaId(null);
     setAreaName('');
     setIsSystem(false);
+    setAccess(null);
   }, []);
 
+  useEffect(() => {
+    if (!authToken) return;
+    let active = true;
+    apiFetch('/api/v1/auth/me', { token: authToken, onUnauthorized: logout }).then(async response => {
+      if (!response.ok) return;
+      const profile = await response.json();
+      if (active) { setAccess(profile); localStorage.setItem('accessProfile', JSON.stringify(profile)); }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [authToken, logout]);
+
+  const accessScopes = access?.access_scopes ?? (areaId != null ? [{ area_id: areaId, subarea_ids: null }] : []);
+  const sapSources = isAdmin ? ['lotes', 'edificios'] : (access?.sap_sources || []);
+
   return (
-    <AuthContext.Provider value={{ authToken, isLoggedIn, username, role, areaId, areaName, isSystem, isAdmin, login, logout }}>
+    <AuthContext.Provider value={{ authToken, isLoggedIn, username, role, areaId, areaName, isSystem, isAdmin, accessScopes, sapSources, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

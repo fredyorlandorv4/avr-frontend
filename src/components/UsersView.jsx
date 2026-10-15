@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 import { TableSkeleton } from './Skeleton.jsx';
+import UserScopeEditor from './UserScopeEditor.jsx';
 
 const ROLES = [
   { value: 'agente',     label: 'Agente' },
@@ -16,6 +17,7 @@ const ROLE_LABEL = { agente: 'Agente', supervisor: 'Supervisor', admin: 'Adminis
 const EMPTY_FORM = {
   full_name: '', username: '', email: '', password: '',
   role: 'agente', area_id: '', is_active: true,
+  access_scopes: [],
 };
 
 const inputCls =
@@ -23,7 +25,7 @@ const inputCls =
 
 export default function UsersView() {
   const { authToken, logout, isSystem } = useAuth();
-  const { areas } = useArea();
+  const { areas, allSubareas } = useArea();
 
   const [users, setUsers]       = useState([]);
   const [loading, setLoading]   = useState(false);
@@ -71,6 +73,7 @@ export default function UsersView() {
       role:      u.role,
       area_id:   u.area_id != null ? String(u.area_id) : '',
       is_active: u.is_active,
+      access_scopes: u.access_scopes ?? [{ area_id: u.area_id, subarea_ids: null }],
     });
     setFormError('');
     setModalOpen(true);
@@ -80,7 +83,10 @@ export default function UsersView() {
   const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   // Nombre del área: usa el del backend y, si no, lo busca en la lista (usuarios system)
-  const areaNameOf = (u) => u.area_name || areas.find((a) => a.id === u.area_id)?.area || `#${u.area_id}`;
+  const areaNameOf = (u) => (u.access_scopes ?? [{ area_id: u.area_id, subarea_ids: null }]).map(scope => {
+    const name = areas.find(a => a.id === scope.area_id)?.area || u.area_name || `#${scope.area_id}`;
+    return scope.subarea_ids == null ? name : `${name}: ${scope.subarea_ids.map(id => allSubareas.find(s => s.id === id)?.name || `#${id}`).join(', ')}`;
+  }).join(' · ');
 
   // El rol "admin" solo existe en el área "system". El resto: supervisor o agente.
   const selectedAreaIsSystem = (() => {
@@ -92,6 +98,9 @@ export default function UsersView() {
   // --- Guardar (crear / editar) ---
   const handleSave = async () => {
     setFormError('');
+    if (isSystem && (!form.access_scopes.length || form.access_scopes.some(scope => scope.subarea_ids != null && !scope.subarea_ids.length))) {
+      setFormError('Selecciona al menos un área y sus subáreas, o concede acceso al área completa.'); return;
+    }
 
     if (!editing) {
       if (!form.username.trim() || !form.email.trim() || !form.password) {
@@ -114,7 +123,7 @@ export default function UsersView() {
           full_name: form.full_name.trim() || null,
           role:      form.role,
         };
-        if (isSystem) body.area_id = Number(form.area_id);  // no-system: el backend fuerza su área
+        if (isSystem) { body.area_id = form.access_scopes[0].area_id; body.access_scopes = form.access_scopes; }
         res = await apiFetch('/api/v1/auth/users', { method: 'POST', token: authToken, onUnauthorized: logout, body });
       } else {
         const body = {
@@ -122,7 +131,7 @@ export default function UsersView() {
           full_name: form.full_name.trim() || null,
           role:      form.role,
         };
-        if (isSystem && form.area_id) body.area_id = Number(form.area_id);
+        if (isSystem) { body.area_id = form.access_scopes[0].area_id; body.access_scopes = form.access_scopes; }
         if (form.password) body.password = form.password;
         res = await apiFetch(`/api/v1/auth/users/${editing.id}`, { method: 'PATCH', token: authToken, onUnauthorized: logout, body });
       }
@@ -131,7 +140,7 @@ export default function UsersView() {
         setModalOpen(false); setEditing(null);
         await loadUsers();
       } else {
-        setFormError(data.detail || 'Error al guardar el usuario.');
+        setFormError(typeof data.detail === 'string' ? data.detail : Array.isArray(data.detail) ? data.detail.map(item => item.msg).join('. ') : 'Error al guardar el usuario.');
       }
     } catch (err) {
       if (err.message !== 'Unauthorized') setFormError('Error de conexión. Verifica que la API esté corriendo.');
@@ -332,19 +341,7 @@ export default function UsersView() {
 
               {/* Área: solo el usuario "system" puede elegir/cambiar. El resto la hereda. */}
               {isSystem && (
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Área *</label>
-                  <select className={inputCls} value={form.area_id} disabled={saving}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const a = areas.find((x) => String(x.id) === String(v));
-                      const isSys = !!a && (a.area || '').trim().toLowerCase() === 'system';
-                      setForm((f) => ({ ...f, area_id: v, role: (!isSys && f.role === 'admin') ? 'agente' : f.role }));
-                    }}>
-                    <option value="">-- Selecciona un área --</option>
-                    {areas.map((a) => <option key={a.id} value={a.id}>{a.area}</option>)}
-                  </select>
-                </div>
+                <UserScopeEditor areas={areas} subareas={allSubareas} value={form.access_scopes} disabled={saving} onChange={scopes => setForm(current => ({ ...current, access_scopes: scopes, area_id: scopes[0]?.area_id != null ? String(scopes[0].area_id) : '', role: areas.find(a => a.id === scopes[0]?.area_id)?.area?.toLowerCase() !== 'system' && current.role === 'admin' ? 'agente' : current.role }))} />
               )}
 
             </div>

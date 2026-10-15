@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -14,6 +14,7 @@ import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useArea } from "../context/AreaContext.jsx";
 import { groupOverdueInstallments } from "../utils/overdueInstallments.js";
+import { portfolioClientId } from "../utils/accessScopes.js";
 
 const currency = new Intl.NumberFormat("es-GT", {
   style: "currency",
@@ -103,9 +104,8 @@ const normalizeClients = (payload) => {
         })
       : [];
     return {
-      id: String(
-        value(client, ["id", "cliente_id", "codigo_cliente"], clientIndex),
-      ),
+      source: client.tipo_cartera || 'lotes',
+      id: portfolioClientId(client, clientIndex),
       name: value(
         client,
         ["nombre_cliente", "cliente", "nombre", "name"],
@@ -137,7 +137,7 @@ function messageFor(response, detail) {
 }
 
 export default function OverduePortfolioView() {
-  const { authToken, logout, isSystem, areaId } = useAuth();
+  const { authToken, logout, isSystem, areaId, sapSources } = useAuth();
   const { areas } = useArea();
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
@@ -161,14 +161,19 @@ export default function OverduePortfolioView() {
   const [clientQuery, setClientQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("all");
+  const [portfolioFilter, setPortfolioFilter] = useState('todo');
   const selectAllRef = useRef(null);
+  const loadSequence = useRef(0);
 
   const load = useCallback(async () => {
     if (!authToken) return;
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
+    setClients([]);
+    setSelectedClientIds(new Set());
     try {
-      const response = await apiFetch("/api/v1/cobros/cartera-vencida", {
+      const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${portfolioFilter}`, {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -181,20 +186,23 @@ export default function OverduePortfolioView() {
           ),
         );
       }
-      setClients(normalizeClients(await response.json()));
+      const payload = await response.json();
+      if (sequence !== loadSequence.current) return;
+      setClients(normalizeClients(payload));
       setExpandedClients(new Set());
       setExpandedLots(new Set());
       setSelectedClientIds(new Set());
     } catch (loadError) {
-      if (loadError.message !== "Unauthorized")
+      if (sequence === loadSequence.current && loadError.message !== "Unauthorized")
         setError(loadError.message || "No se pudo cargar la cartera vencida.");
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [authToken, logout]);
+  }, [authToken, logout, portfolioFilter]);
 
   useEffect(() => {
     load();
+    return () => { loadSequence.current += 1; };
   }, [load]);
 
   const selectedClients = clients.filter((client) =>
@@ -421,6 +429,10 @@ export default function OverduePortfolioView() {
 
   const prepareMessageSend = () => {
     if (!selectedClients.length) return;
+    if (selectedClients.some(client => client.source === 'edificios')) {
+      setMessageError('El envío de mensajes desde esta pantalla está disponible para Lotes. Selecciona registros de Lotes para continuar.');
+      return;
+    }
     setMessageError("");
     setMessageSuccess("");
     const selectionsByKey = new Map();
@@ -566,7 +578,8 @@ export default function OverduePortfolioView() {
             {messageSuccess}
           </p>
         )}
-        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px_180px]">
+        <div className="mt-5 grid gap-3 lg:grid-cols-4">
+          <label className="text-sm font-medium text-gray-700">Cartera<select value={portfolioFilter} onChange={event => { setPortfolioFilter(event.target.value); setSelectedClientIds(new Set()); setProjectFilter(''); }} disabled={loading || sendingMessages} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-[#053E68]"><option value="todo">Todo</option>{sapSources.includes('lotes') && <option value="lotes">Lotes</option>}{sapSources.includes('edificios') && <option value="edificios">Edificios</option>}</select></label>
           <label className="text-sm font-medium text-gray-700">
             Buscar cliente o número
             <input
@@ -656,7 +669,7 @@ export default function OverduePortfolioView() {
                 {visibleClients.map((client) => {
                   const clientExpanded = expandedClients.has(client.id);
                   return (
-                    <>
+                    <Fragment key={client.id}>
                       <tr key={client.id} className="hover:bg-gray-50">
                         <td className="px-4 py-4">
                           <input
@@ -671,6 +684,7 @@ export default function OverduePortfolioView() {
                           <p className="font-semibold text-[#053E68]">
                             {client.name}
                           </p>
+                          <span className="text-xs text-[#0B5F8F]">{client.source === 'edificios' ? 'Edificios' : 'Lotes'}</span>
                           <p className="text-xs text-gray-500 mt-0.5">
                             {[client.company, client.code]
                               .filter(Boolean)
@@ -694,7 +708,7 @@ export default function OverduePortfolioView() {
                             onClick={() =>
                               toggle(setExpandedClients, client.id)
                             }
-                            aria-label={`Ver lotes de ${client.name}`}
+                            aria-label={`Ver unidades de ${client.name}`}
                             className="p-1.5 rounded hover:bg-[#053E68]/10 text-[#053E68]"
                           >
                             {clientExpanded ? (
@@ -710,7 +724,7 @@ export default function OverduePortfolioView() {
                           <td colSpan="6" className="p-4 bg-gray-50">
                             <div className="space-y-3">
                               {client.lots.map((lot) => {
-                                const lotId = `${client.id}:${lot.id}`;
+                                const lotId = JSON.stringify([client.id, lot.project, lot.id]);
                                 const lotExpanded = expandedLots.has(lotId);
                                 return (
                                   <div
@@ -805,7 +819,7 @@ export default function OverduePortfolioView() {
                                                   className="px-4 py-7 text-center text-gray-400"
                                                 >
                                                   No hay cuotas vencidas para
-                                                  este lote.
+                                                  esta unidad.
                                                 </td>
                                               </tr>
                                             )}
@@ -818,14 +832,14 @@ export default function OverduePortfolioView() {
                               })}
                               {!client.lots.length && (
                                 <p className="py-4 text-center text-sm text-gray-400">
-                                  No hay lotes vencidos para este cliente.
+                                  No hay unidades con saldo pendiente para este cliente.
                                 </p>
                               )}
                             </div>
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
                 {visibleClients.length === 0 && (

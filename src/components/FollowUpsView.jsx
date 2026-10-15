@@ -1,4 +1,5 @@
 import { Clock, RefreshCw } from 'lucide-react';
+import AreaFilter from './AreaFilter.jsx';
 
 function FollowUpCard({ followUp, bgColor, onToggleComplete }) {
   const notesParts = (followUp.notes || '').split('|');
@@ -134,6 +135,7 @@ export default function FollowUpsView({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {!showAreaFilter && <AreaFilter />}
           {showAreaFilter && areas.length > 0 && (
             <div className="inline-flex items-center gap-1 bg-gray-100 rounded-xl p-1" role="tablist" aria-label="Filtrar por área">
               {areas.map((a) => {
