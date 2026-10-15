@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { formatMessagingLots } from "../utils/messagingHistory.js";
 
 const initialForm = {
   company_name: "",
@@ -796,7 +797,7 @@ export default function MessagingView() {
                         </button>
                       </td>
                       <td className="px-3 py-3 text-slate-600">
-                        {valueOf(run, ["queried_at", "created_at"])}
+                        {valueOf(run, ["queried_at", "created_at", "started_at", "run_date"])}
                       </td>
                       <td className="px-3 py-3 text-slate-600">
                         {valueOf(run, ["target_due_date"])}
@@ -816,7 +817,7 @@ export default function MessagingView() {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-slate-500">
-                        {valueOf(run, ["error"])}
+                        {valueOf(run, ["error_message", "error"])}
                       </td>
                     </tr>
                     {expandedRuns.has(runId) && (
@@ -858,6 +859,7 @@ export default function MessagingView() {
                                     >
                                       <td className="p-2">
                                         {valueOf(delivery, [
+                                          "nombre_cliente",
                                           "client_name",
                                           "cliente",
                                         ])}
@@ -869,8 +871,8 @@ export default function MessagingView() {
                                         ])}
                                       </td>
                                       <td className="p-2">
-                                        {valueOf(delivery, ["company_name"])} /{" "}
-                                        {valueOf(delivery, ["project_name"])}
+                                        {valueOf(delivery, ["empresa", "company_name"])} /{" "}
+                                        {valueOf(delivery, ["proyecto", "project_name"])}
                                       </td>
                                       <td className="p-2">
                                         {valueOf(delivery, [
@@ -880,14 +882,12 @@ export default function MessagingView() {
                                       <td className="p-2">
                                         {money.format(
                                           Number(
-                                            valueOf(delivery, ["total"], 0),
+                                            valueOf(delivery, ["total_pendiente", "total"], 0),
                                           ) || 0,
                                         )}
                                       </td>
                                       <td className="p-2">
-                                        {Array.isArray(delivery.lots)
-                                          ? delivery.lots.join(", ")
-                                          : valueOf(delivery, ["lotes"])}
+                                        {formatMessagingLots(delivery.lotes ?? delivery.lots)}
                                       </td>
                                       <td className="p-2">
                                         {valueOf(delivery, ["status"])}
@@ -899,7 +899,7 @@ export default function MessagingView() {
                                         ])}
                                       </td>
                                       <td className="p-2">
-                                        {valueOf(delivery, ["error"])}
+                                        {valueOf(delivery, ["error_message", "error"])}
                                       </td>
                                     </tr>
                                   ),
