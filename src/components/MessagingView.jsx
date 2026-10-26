@@ -7,6 +7,7 @@ import {
   Pencil,
   RefreshCw,
   Trash2,
+  X,
 } from "lucide-react";
 import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -48,7 +49,7 @@ async function backendError(response, fallback) {
     : detail || fallback;
 }
 
-function ImagePreview({ imageUrl }) {
+function ImagePreview({ imageUrl, onOpen }) {
   const { authToken, logout } = useAuth();
   const [source, setSource] = useState("");
   useEffect(() => {
@@ -70,13 +71,75 @@ function ImagePreview({ imageUrl }) {
     };
   }, [imageUrl, authToken, logout]);
   return source ? (
-    <img
-      src={source}
-      alt="Vista previa de imagen bancaria"
-      className="h-14 w-20 rounded-lg border border-slate-200 object-cover shadow-sm"
-    />
+    <button
+      type="button"
+      onClick={onOpen}
+      title="Abrir imagen guardada"
+      aria-label="Abrir imagen guardada"
+      className="!p-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B5A8E]"
+    >
+      <img
+        src={source}
+        alt="Vista previa de imagen bancaria"
+        className="h-14 w-20 rounded-lg border border-slate-200 object-cover shadow-sm transition hover:opacity-80"
+      />
+    </button>
   ) : (
     <span className="text-slate-400">Sin imagen</span>
+  );
+}
+
+function SavedImageModal({ imageUrl, onClose }) {
+  const { authToken, logout } = useAuth();
+  const [source, setSource] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!imageUrl) return undefined;
+    let active = true;
+    let objectUrl = "";
+    apiFetch(imageUrl, { token: authToken, onUnauthorized: logout })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("No se pudo cargar la imagen guardada.");
+        objectUrl = URL.createObjectURL(await response.blob());
+        if (active) setSource(objectUrl);
+      })
+      .catch((requestError) => {
+        if (active && requestError.message !== "Unauthorized") setError(requestError.message);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [imageUrl, authToken, logout]);
+
+  if (!imageUrl) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onMouseDown={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Imagen bancaria guardada"
+        className="relative max-h-[90vh] w-full max-w-5xl rounded-2xl bg-white p-4 shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar imagen"
+          className="absolute right-2 top-2 z-10 !p-2 text-slate-600 hover:bg-slate-100"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        {source ? (
+          <img src={source} alt="Imagen bancaria guardada" className="max-h-[82vh] w-full rounded-xl object-contain" />
+        ) : (
+          <p className="p-12 text-center text-slate-500">{error || "Cargando imagen guardada…"}</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -111,6 +174,7 @@ export default function MessagingView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [selectedImageUrl, setSelectedImageUrl] = useState("");
   const [expandedRuns, setExpandedRuns] = useState(new Set());
   const [deliveries, setDeliveries] = useState({});
   const fileInput = useRef(null);
@@ -691,6 +755,7 @@ export default function MessagingView() {
                     <ImagePreview
                       key={valueOf(project, ["image_url"], "")}
                       imageUrl={valueOf(project, ["image_url"], "")}
+                      onOpen={() => setSelectedImageUrl(valueOf(project, ["image_url"], ""))}
                     />
                   </td>
                   <td className="px-3 py-3">
@@ -931,6 +996,13 @@ export default function MessagingView() {
           cliente lo haya leído.
         </p>
       </section>
+      {selectedImageUrl && (
+        <SavedImageModal
+          key={selectedImageUrl}
+          imageUrl={selectedImageUrl}
+          onClose={() => setSelectedImageUrl("")}
+        />
+      )}
     </div>
   );
 }

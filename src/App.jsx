@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Phone, Bell, Menu, X, Users } from 'lucide-react';
+import { Phone, Bell, Menu, Moon, Sun, X, Users } from 'lucide-react';
 
 import { useAuth } from './context/AuthContext.jsx';
 import { useArea } from './context/AreaContext.jsx';
@@ -74,7 +74,7 @@ function PublicRoute({ children }) {
 
 // ─── Layout (fixed chrome: sidebar + headers — content goes in <Outlet />) ─────
 
-function Layout() {
+function Layout({ darkMode, onToggleDarkMode }) {
   const { logout, username, role } = useAuth();
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -108,6 +108,15 @@ function Layout() {
                 <h1 className="text-base font-bold text-[#053E68] leading-tight">RV4 - Call System</h1>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={onToggleDarkMode}
+              aria-label={darkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
+              title={darkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl transition"
+            >
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-xl transition">
               <Bell className="w-6 h-6" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#F4CD04] rounded-xl ring-2 ring-white" />
@@ -123,6 +132,15 @@ function Layout() {
               <div className="h-1 w-10 bg-[#F4CD04] rounded-xl mt-1.5" />
             </div>
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onToggleDarkMode}
+                aria-label={darkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
+                title={darkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
+                className="p-2.5 text-gray-500 hover:bg-gray-100 rounded-xl transition"
+              >
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
               <button className="relative p-2.5 text-gray-500 hover:bg-gray-100 rounded-xl transition">
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#F4CD04] rounded-xl ring-2 ring-white" />
@@ -245,7 +263,7 @@ function CampaignContactsPage({ campaigns, campaignContacts, calls, loading, loa
 
 // ─── App shell (holds shared state + data loaders, defines routes) ────────────
 
-function AppShell() {
+function AppShell({ darkMode, onToggleDarkMode }) {
   const { authToken, isLoggedIn, logout, isAdmin, isSystem, areaName, role, sapSources } = useAuth();
   const { areas, scope } = useArea();
 
@@ -537,7 +555,7 @@ function AppShell() {
       />
 
       <Routes>
-        <Route element={<Layout />}>
+        <Route element={<Layout darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
 
           <Route path="/dashboard" element={
@@ -659,6 +677,13 @@ function AppShell() {
 // ─── Root: auth guards + login route ─────────────────────────────────────────
 
 export default function App() {
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
+
   return (
     <Routes>
       <Route
@@ -673,7 +698,10 @@ export default function App() {
         path="/*"
         element={
           <PrivateRoute>
-            <AppShell />
+            <AppShell
+              darkMode={darkMode}
+              onToggleDarkMode={() => setDarkMode((enabled) => !enabled)}
+            />
           </PrivateRoute>
         }
       />

@@ -25,3 +25,46 @@ button {
   cursor: pointer;
   transition: border-color 0.25s;
 }
+
+/* Tema oscuro global: conserva los colores de marca y adapta las superficies claras. */
+.dark {
+  color-scheme: dark;
+  background: #0b121a;
+}
+
+.dark .bg-white,
+.dark [class~="!bg-white"] {
+  background-color: #17212b !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-slate-50,
+.dark .bg-gray-100,
+.dark .bg-slate-100,
+.dark .bg-gray-200,
+.dark .bg-slate-200 {
+  background-color: #202c38 !important;
+}
+
+.dark [class*="text-gray-"],
+.dark [class*="text-slate-"] {
+  color: #d7e0e8 !important;
+}
+
+.dark .text-\[\#053E68\],
+.dark .text-\[\#0B5A8E\] {
+  color: #f4cd04 !important;
+}
+
+.dark [class*="border-gray-"],
+.dark [class*="border-slate-"] {
+  border-color: #3a4a59 !important;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #17212b !important;
+  color: #edf3f7 !important;
+  border-color: #465a6c !important;
+}
