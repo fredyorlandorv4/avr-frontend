@@ -56,3 +56,15 @@ export function groupOverdueInstallments(installments) {
       total: group.totalCents / 100,
     }));
 }
+
+export function campaignDebtColumns(lot) {
+  const installments = Array.isArray(lot?.installments) ? lot.installments : [];
+  const monthAmounts = installments.slice(0, 3).map((installment) => Number(installment?.total) || 0);
+
+  return {
+    'Mes 1': monthAmounts[0] || 0,
+    'Mes 2': monthAmounts[1] || 0,
+    'Mes 3': monthAmounts[2] || 0,
+    TOTAL: Number(lot?.pendingTotal) || 0,
+  };
+}

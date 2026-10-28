@@ -13,7 +13,10 @@ import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useArea } from "../context/AreaContext.jsx";
-import { groupOverdueInstallments } from "../utils/overdueInstallments.js";
+import {
+  campaignDebtColumns,
+  groupOverdueInstallments,
+} from "../utils/overdueInstallments.js";
 import { portfolioClientId } from "../utils/accessScopes.js";
 import { portfolioCurrency, formatPortfolioMoney } from "../utils/portfolioMoney.js";
 
@@ -369,10 +372,10 @@ export default function OverduePortfolioView() {
 
     const rows = selectedClients.flatMap((client) =>
       client.lots.map((lot) => ({
-        lote: lot.lot,
-        cliente: client.name,
-        telefono: client.phone === "Sin teléfono" ? "" : client.phone,
-        total: lot.pendingTotal,
+        Lote: lot.lot,
+        Cliente: client.name,
+        Tel: client.phone === "Sin teléfono" ? "" : client.phone,
+        ...campaignDebtColumns(lot),
       })),
     );
     if (!rows.length) {

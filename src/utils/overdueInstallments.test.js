@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupOverdueInstallments } from './overdueInstallments.js';
+import { campaignDebtColumns, groupOverdueInstallments } from './overdueInstallments.js';
 
 test('combina saldos del mismo mes y numera las cuotas desde uno', () => {
   const rows = [
@@ -28,4 +28,33 @@ test('no mezcla el mismo mes de años diferentes y conserva la fecha más antigu
     { number: 1, dueDate: '2025-09-30', age: 'Más de 360 días', total: 2 },
     { number: 2, dueDate: '2026-09-15', age: '31-60 días', total: 4 },
   ]);
+});
+
+test('genera las columnas requeridas por la campaña de cobros desde Consulta SAP', () => {
+  assert.deepEqual(campaignDebtColumns({
+    pendingTotal: 1000,
+    installments: [
+      { total: 100 },
+      { total: 200 },
+      { total: 300 },
+      { total: 400 },
+    ],
+  }), {
+    'Mes 1': 100,
+    'Mes 2': 200,
+    'Mes 3': 300,
+    TOTAL: 1000,
+  });
+});
+
+test('completa con cero los meses inexistentes sin alterar el total del lote', () => {
+  assert.deepEqual(campaignDebtColumns({
+    pendingTotal: 250,
+    installments: [{ total: 250 }],
+  }), {
+    'Mes 1': 250,
+    'Mes 2': 0,
+    'Mes 3': 0,
+    TOTAL: 250,
+  });
 });
