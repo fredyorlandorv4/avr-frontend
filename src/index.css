@@ -56,6 +56,12 @@ button {
   color: #f4cd04 !important;
 }
 
+/* Los accesos activos usan fondo amarillo y texto azul de marca; ese texto no
+   debe heredar el amarillo del tema oscuro porque pierde contraste. */
+.dark .bg-\[\#F4CD04\].text-\[\#053E68\] {
+  color: #053e68 !important;
+}
+
 .dark [class*="border-gray-"],
 .dark [class*="border-slate-"] {
   border-color: #3a4a59 !important;

@@ -22,10 +22,26 @@ function getTranscriptionText(transcription) {
   return '';
 }
 
+function splitTranscriptionEntries(transcription) {
+  const entryPattern = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*([^:\n]+):\s*/g;
+  const matches = [...transcription.matchAll(entryPattern)];
+
+  if (!matches.length) return [{ text: transcription }];
+
+  return matches.map((match, index) => ({
+    time: match[1],
+    speaker: match[2].trim(),
+    text: transcription
+      .slice(match.index + match[0].length, matches[index + 1]?.index)
+      .trim(),
+  }));
+}
+
 export default function TranscriptionModal({ show, call, onClose }) {
   if (!show || !call) return null;
 
   const transcriptionText = getTranscriptionText(call.transcription);
+  const transcriptionEntries = splitTranscriptionEntries(transcriptionText);
 
   return (
     <div
@@ -47,8 +63,21 @@ export default function TranscriptionModal({ show, call, onClose }) {
         </div>
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-140px)]">
           {transcriptionText ? (
-            <div className="prose max-w-none">
-              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{transcriptionText}</p>
+            <div className="space-y-3">
+              {transcriptionEntries.map((entry, index) => (
+                <div
+                  key={`${entry.time || 'entry'}-${index}`}
+                  className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-gray-700 leading-relaxed"
+                >
+                  {entry.speaker ? (
+                    <div className="mb-1 flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-xs tabular-nums text-gray-400">[{entry.time}]</span>
+                      <strong className="text-[#053E68]">{entry.speaker}:</strong>
+                    </div>
+                  ) : null}
+                  <p className="whitespace-pre-wrap break-words">{entry.text}</p>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12">
