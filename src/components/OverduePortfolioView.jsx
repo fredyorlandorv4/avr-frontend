@@ -370,13 +370,30 @@ export default function OverduePortfolioView() {
       return;
     }
 
+    // El endpoint de carga valida los encabezados de la primera fila. Usamos una
+    // matriz para conservar exactamente los nombres y el orden que espera.
+    const campaignHeaders = [
+      "Lote",
+      "Cliente",
+      "Tel",
+      "Mes 1",
+      "Mes 2",
+      "Mes 3",
+      "TOTAL",
+    ];
     const rows = selectedClients.flatMap((client) =>
-      client.lots.map((lot) => ({
-        Lote: lot.lot,
-        Cliente: client.name,
-        Tel: client.phone === "Sin teléfono" ? "" : client.phone,
-        ...campaignDebtColumns(lot),
-      })),
+      client.lots.map((lot) => {
+        const debt = campaignDebtColumns(lot);
+        return [
+          lot.lot,
+          client.name,
+          client.phone === "Sin teléfono" ? "" : client.phone,
+          debt["Mes 1"],
+          debt["Mes 2"],
+          debt["Mes 3"],
+          debt.TOTAL,
+        ];
+      }),
     );
     if (!rows.length) {
       setCampaignError(
@@ -391,7 +408,7 @@ export default function OverduePortfolioView() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(
         workbook,
-        XLSX.utils.json_to_sheet(rows),
+        XLSX.utils.aoa_to_sheet([campaignHeaders, ...rows]),
         "Contactos",
       );
       const file = new File(
