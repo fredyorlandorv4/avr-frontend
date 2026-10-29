@@ -226,6 +226,7 @@ export default function OverduePortfolioView() {
       return {
         clients: refreshedClients,
         selectedClientIds: retainedClientIds,
+        removedCount: previousSelectedIds.size - retainedClientIds.size,
       };
     } catch (loadError) {
       if (sequence === loadSequence.current && loadError.message !== "Unauthorized")
@@ -531,13 +532,16 @@ export default function OverduePortfolioView() {
           if (!refreshedSelections.length) {
             setMessageSelection(null);
             setMessageError(
-              "La cartera cambió, ninguno de los clientes seleccionados tienen cuotas pendientes en este momento.",
+              "La cartera cambió. No se enviarán mensajes porque ninguno de los clientes seleccionados cuenta con cuotas atrasadas en este momento.",
             );
             return;
           }
 
           setMessageSelection({
             ready: refreshedSelections,
+            notice: refreshed.removedCount > 0
+              ? "Algunos clientes no recibirán mensajes porque ya no cuentan con cuotas atrasadas."
+              : "",
           });
           return;
         }
@@ -1052,6 +1056,11 @@ export default function OverduePortfolioView() {
                 </b>{" "}
                 mensajes listos para encolar.
               </p>
+              {messageSelection.notice && (
+                <p className="rounded-lg bg-amber-50 p-3 text-amber-800">
+                  {messageSelection.notice}
+                </p>
+              )}
             </div>
             <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
               <button
