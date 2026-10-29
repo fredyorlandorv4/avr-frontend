@@ -136,6 +136,28 @@ function messageFor(response, detail) {
   return detail || `No se pudo cargar la cartera vencida (${response.status}).`;
 }
 
+function messageSelectionsFor(clients, selectedClientIds, projectFilter) {
+  const selectionsByKey = new Map();
+
+  clients
+    .filter((client) => selectedClientIds.has(client.id))
+    .forEach((client) => {
+      client.lots
+        .filter((lot) => !projectFilter || lot.project === projectFilter)
+        .forEach((lot) => {
+          if (!client.company || !lot.project || (!client.code && !client.name)) return;
+          const selection = {
+            company_name: client.company,
+            project_name: lot.project,
+            ...(client.code ? { customer_code: client.code } : { customer_name: client.name }),
+          };
+          selectionsByKey.set(`${client.company}:${client.code || client.name}:${lot.project}`, selection);
+        });
+    });
+
+  return [...selectionsByKey.values()];
+}
+
 export default function OverduePortfolioView() {
   const { authToken, logout, isSystem, areaId, sapSources } = useAuth();
   const { areas } = useArea();
@@ -165,13 +187,17 @@ export default function OverduePortfolioView() {
   const selectAllRef = useRef(null);
   const loadSequence = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (idsToPreserve = null) => {
     if (!authToken) return;
+    const preserveSelection = idsToPreserve instanceof Set;
+    const previousSelectedIds = preserveSelection
+      ? new Set(idsToPreserve)
+      : new Set();
     const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
     setClients([]);
-    setSelectedClientIds(new Set());
+    if (!preserveSelection) setSelectedClientIds(new Set());
     try {
       const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${portfolioFilter}`, {
         token: authToken,
@@ -188,10 +214,19 @@ export default function OverduePortfolioView() {
       }
       const payload = await response.json();
       if (sequence !== loadSequence.current) return;
-      setClients(normalizeClients(payload));
+      const refreshedClients = normalizeClients(payload);
+      const availableClientIds = new Set(refreshedClients.map((client) => client.id));
+      const retainedClientIds = new Set(
+        [...previousSelectedIds].filter((id) => availableClientIds.has(id)),
+      );
+      setClients(refreshedClients);
       setExpandedClients(new Set());
       setExpandedLots(new Set());
-      setSelectedClientIds(new Set());
+      setSelectedClientIds(retainedClientIds);
+      return {
+        clients: refreshedClients,
+        selectedClientIds: retainedClientIds,
+      };
     } catch (loadError) {
       if (sequence === loadSequence.current && loadError.message !== "Unauthorized")
         setError(loadError.message || "No se pudo cargar la cartera vencida.");
@@ -456,26 +491,16 @@ export default function OverduePortfolioView() {
     }
     setMessageError("");
     setMessageSuccess("");
-    const selectionsByKey = new Map();
-    selectedClients.forEach((client) => {
-      client.lots
-        .filter((lot) => !projectFilter || lot.project === projectFilter)
-        .forEach((lot) => {
-          if (!client.company || !lot.project || (!client.code && !client.name)) return;
-          const selection = {
-            company_name: client.company,
-            project_name: lot.project,
-            ...(client.code ? { customer_code: client.code } : { customer_name: client.name }),
-          };
-          selectionsByKey.set(`${client.company}:${client.code || client.name}:${lot.project}`, selection);
-        });
-    });
-    const selections = [...selectionsByKey.values()];
+    const selections = messageSelectionsFor(
+      clients,
+      selectedClientIds,
+      projectFilter,
+    );
     if (!selections.length) {
       setMessageError("Los clientes seleccionados no tienen empresa, proyecto o identificación suficientes para preparar el cobro.");
       return;
     }
-    setMessageSelection({ ready: selections, unavailable: 0 });
+    setMessageSelection({ ready: selections });
   };
 
   const sendSelectedMessages = async () => {
@@ -494,9 +519,27 @@ export default function OverduePortfolioView() {
         const detail = payload.detail;
         const code = typeof detail === "object" ? detail?.code : detail;
         if (code === "collection_candidates_changed") {
-          await load();
-          setSelectedClientIds(new Set());
-          throw new Error("La cartera cambió desde la selección. Se recargó la consulta; selecciona los clientes nuevamente.");
+          const refreshed = await load(selectedClientIds);
+          const refreshedSelections = refreshed
+            ? messageSelectionsFor(
+                refreshed.clients,
+                refreshed.selectedClientIds,
+                projectFilter,
+              )
+            : [];
+
+          if (!refreshedSelections.length) {
+            setMessageSelection(null);
+            setMessageError(
+              "La cartera cambió, ninguno de los clientes seleccionados tienen cuotas pendientes en este momento.",
+            );
+            return;
+          }
+
+          setMessageSelection({
+            ready: refreshedSelections,
+          });
+          return;
         }
         if (code === "selected_reminders_not_ready") {
           const unavailable = detail?.unavailable || detail?.not_ready || detail?.reminders || [];
@@ -551,7 +594,7 @@ export default function OverduePortfolioView() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={load}
+              onClick={() => load(selectedClientIds)}
               disabled={loading || sendingMessages}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
@@ -1009,16 +1052,6 @@ export default function OverduePortfolioView() {
                 </b>{" "}
                 mensajes listos para encolar.
               </p>
-              {messageSelection.unavailable > 0 && (
-                <p className="rounded-lg bg-amber-50 p-3 text-amber-800">
-                  {messageSelection.unavailable} cliente
-                  {messageSelection.unavailable === 1 ? "" : "s"} seleccionado
-                  {messageSelection.unavailable === 1 ? "" : "s"} no está
-                  {messageSelection.unavailable === 1 ? "" : "n"} listo
-                  {messageSelection.unavailable === 1 ? "" : "s"} y no se
-                  incluirá{messageSelection.unavailable === 1 ? "" : "n"}.
-                </p>
-              )}
             </div>
             <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
               <button
