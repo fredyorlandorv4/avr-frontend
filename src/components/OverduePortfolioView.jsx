@@ -599,6 +599,7 @@ export default function OverduePortfolioView() {
     setSendingMessages(true);
     setMessageError("");
     let queuedCount = 0;
+    const skippedRecipients = new Set();
     try {
       for (const group of messageSelection.groups) {
         const response = await apiFetch("/api/v1/cobros/reminders/send", {
@@ -628,18 +629,21 @@ export default function OverduePortfolioView() {
           }
           throw new Error(typeof detail === "string" ? detail : detail?.message || "No se pudieron encolar los mensajes.");
         }
+        (payload.skipped_candidates || []).forEach((item) => {
+          skippedRecipients.add(item.customer_name || item.customer_code || "Cliente sin nombre");
+        });
         queuedCount += payload.selected_count ?? group.count;
         setMessageSelection((current) => current ? { ...current, groups: current.groups.slice(1) } : null);
       }
       setMessageSuccess(
-        `${queuedCount} selección${queuedCount === 1 ? "" : "es"} encolada${queuedCount === 1 ? "" : "s"} para envío.`,
+        `${queuedCount ? `${queuedCount} selección${queuedCount === 1 ? "" : "es"} encolada${queuedCount === 1 ? "" : "s"} para envío.` : "No había selecciones nuevas para encolar."}${skippedRecipients.size ? ` No se reenviará a ${[...skippedRecipients].join(", ")} porque ya tiene un envío en curso o aceptado.` : ""}`,
       );
       setMessageSelection(null);
       setSelectedClientIds(new Set());
     } catch (requestError) {
       if (requestError.message !== "Unauthorized")
         setMessageError(
-          `${queuedCount ? `${queuedCount} mensaje(s) ya encolado(s). ` : ""}${requestError.message || "No se pudieron encolar los mensajes."}`,
+          `${queuedCount ? `${queuedCount} selección(es) ya encolada(s). ` : ""}${skippedRecipients.size ? `Omitidos por envío previo o en curso: ${[...skippedRecipients].join(", ")}. ` : ""}${requestError.message || "No se pudieron encolar los mensajes."}`,
         );
     } finally {
       setSendingMessages(false);

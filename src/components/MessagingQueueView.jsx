@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { MessageSquare, RefreshCw, X } from "lucide-react";
 import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { messagingType, matchesMessagingType } from "../utils/messagingType.js";
 
 const todayInGuatemala = () => {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -174,6 +175,7 @@ export default function MessagingQueueView() {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const requestInFlight = useRef(false);
 
   const load = useCallback(
@@ -265,6 +267,13 @@ export default function MessagingQueueView() {
         : null)
     : null;
   const closeDetail = useCallback(() => setSelected(null), []);
+  const visibleDeliveries = useMemo(() => {
+    const dates = new Map(runs.map((run) => [String(run.id), runDateOf(run)]));
+    return deliveries.map((delivery) => ({
+      ...delivery,
+      displayType: messagingType(delivery, dates.get(String(delivery.run_id))),
+    })).filter((delivery) => matchesMessagingType(delivery.displayType, typeFilter));
+  }, [deliveries, runs, typeFilter]);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-5 pb-8">
@@ -310,22 +319,33 @@ export default function MessagingQueueView() {
               Doble clic en un mensaje para ver el texto completo y la imagen.
             </p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {deliveries.length} registros
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-slate-600">
+              Tipo de mensaje{" "}
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                <option value="all">Todos</option>
+                <option value="collection">Cobros</option>
+                <option value="reminder">Recordatorios</option>
+              </select>
+            </label>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              {visibleDeliveries.length} registros
+            </span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] table-fixed text-left text-sm">
             <colgroup>
-              <col className="w-[21%]" />
-              <col className="w-[18%]" />
-              <col className="w-[18%]" />
-              <col className="w-[31%]" />
+              <col className="w-[17%]" />
+              <col className="w-[15%]" />
+              <col className="w-[15%]" />
+              <col className="w-[13%]" />
+              <col className="w-[28%]" />
               <col className="w-[12%]" />
             </colgroup>
             <thead className="bg-[#053E68] text-white">
               <tr>
-                {["Cliente", "Proyecto", "Lote", "Mensaje", "Status"].map(
+                {["Cliente", "Proyecto", "Lote", "Tipo", "Mensaje", "Status"].map(
                   (header) => (
                     <th key={header} className="px-4 py-3 font-semibold">
                       {header}
@@ -338,14 +358,14 @@ export default function MessagingQueueView() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     Cargando mensajes…
                   </td>
                 </tr>
-              ) : deliveries.length ? (
-                deliveries.map((delivery) => {
+              ) : visibleDeliveries.length ? (
+                visibleDeliveries.map((delivery) => {
                   const status = statusOf(delivery);
                   return (
                     <tr key={delivery.id} className="hover:bg-slate-50">
@@ -366,6 +386,9 @@ export default function MessagingQueueView() {
                         title={lotsOf(delivery)}
                       >
                         {lotsOf(delivery)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {{ collection: "Cobro", reminder: "Recordatorio", combined: "Cobro y recordatorio", unknown: "Sin identificar" }[delivery.displayType]}
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -396,10 +419,12 @@ export default function MessagingQueueView() {
               ) : (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-12 text-center text-slate-500"
                   >
-                    {runs.length
+                    {deliveries.length && typeFilter !== "all"
+                      ? "No hay mensajes de este tipo."
+                      : runs.length
                       ? "Los mensajes del envío manual aún se están preparando."
                       : "Aún no se han encolado mensajes hoy."}
                   </td>
