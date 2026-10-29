@@ -171,6 +171,23 @@ function messageSelectionsFor(clients, selectedClientIds, projectFilter) {
   return [...selectionsByKey.values()];
 }
 
+function withoutRejectedProjects(clients, rejectedKeys) {
+  if (!rejectedKeys.size) return clients;
+  return clients.flatMap((client) => {
+    const lots = client.lots.filter((lot) => {
+      const selection = messageSelectionFor(client, lot);
+      return !selection || !rejectedKeys.has(messageSelectionKey(selection));
+    });
+    if (!lots.length) return [];
+    return [{
+      ...client,
+      lots,
+      overdueInstallments: lots.reduce((total, lot) => total + lot.overdueInstallments, 0),
+      pendingTotal: lots.reduce((total, lot) => total + lot.pendingTotal, 0),
+    }];
+  });
+}
+
 export default function OverduePortfolioView() {
   const { authToken, logout, isSystem, areaId, sapSources } = useAuth();
   const { areas } = useArea();
@@ -199,6 +216,7 @@ export default function OverduePortfolioView() {
   const [portfolioFilter, setPortfolioFilter] = useState('todo');
   const selectAllRef = useRef(null);
   const loadSequence = useRef(0);
+  const rejectedSelectionKeys = useRef(new Set());
 
   const load = useCallback(async (idsToPreserve = null) => {
     if (!authToken) return;
@@ -227,7 +245,10 @@ export default function OverduePortfolioView() {
       }
       const payload = await response.json();
       if (sequence !== loadSequence.current) return;
-      const refreshedClients = normalizeClients(payload);
+      const refreshedClients = withoutRejectedProjects(
+        normalizeClients(payload),
+        rejectedSelectionKeys.current,
+      );
       const availableClientIds = new Set(refreshedClients.map((client) => client.id));
       const retainedClientIds = new Set(
         [...previousSelectedIds].filter((id) => availableClientIds.has(id)),
@@ -540,16 +561,21 @@ export default function OverduePortfolioView() {
               ? detail.missing_selections.map(messageSelectionKey)
               : [],
           );
+          missingKeys.forEach((key) => rejectedSelectionKeys.current.add(key));
           const refreshed = await load(selectedClientIds);
-          const refreshedSelections = refreshed
-            ? messageSelectionsFor(
-                refreshed.clients,
-                refreshed.selectedClientIds,
-                projectFilter,
-              ).filter((selection) => !missingKeys.has(messageSelectionKey(selection)))
-            : [];
+          if (!refreshed) {
+            setMessageSelection(null);
+            setMessageError("No se pudo actualizar la cartera. Intenta nuevamente antes de enviar.");
+            return;
+          }
+          const refreshedSelections = messageSelectionsFor(
+            refreshed.clients,
+            refreshed.selectedClientIds,
+            projectFilter,
+          );
 
           if (!refreshedSelections.length) {
+            setSelectedClientIds(new Set());
             setMessageSelection(null);
             setMessageError(
               "La cartera cambió. No se enviarán mensajes porque ninguno de los clientes seleccionados cuenta con cuotas atrasadas en este momento.",
