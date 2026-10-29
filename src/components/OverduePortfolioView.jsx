@@ -136,6 +136,24 @@ function messageFor(response, detail) {
   return detail || `No se pudo cargar la cartera vencida (${response.status}).`;
 }
 
+function messageSelectionFor(client, lot) {
+  if (!client.company || !lot.project || (!client.code && !client.name)) return null;
+  return {
+    company_name: client.company,
+    project_name: lot.project,
+    ...(client.code ? { customer_code: client.code } : { customer_name: client.name }),
+  };
+}
+
+function messageSelectionKey(selection) {
+  return JSON.stringify([
+    selection.company_name,
+    selection.project_name,
+    selection.customer_code || "",
+    selection.customer_name || "",
+  ]);
+}
+
 function messageSelectionsFor(clients, selectedClientIds, projectFilter) {
   const selectionsByKey = new Map();
 
@@ -145,13 +163,8 @@ function messageSelectionsFor(clients, selectedClientIds, projectFilter) {
       client.lots
         .filter((lot) => !projectFilter || lot.project === projectFilter)
         .forEach((lot) => {
-          if (!client.company || !lot.project || (!client.code && !client.name)) return;
-          const selection = {
-            company_name: client.company,
-            project_name: lot.project,
-            ...(client.code ? { customer_code: client.code } : { customer_name: client.name }),
-          };
-          selectionsByKey.set(`${client.company}:${client.code || client.name}:${lot.project}`, selection);
+          const selection = messageSelectionFor(client, lot);
+          if (selection) selectionsByKey.set(messageSelectionKey(selection), selection);
         });
     });
 
@@ -226,7 +239,6 @@ export default function OverduePortfolioView() {
       return {
         clients: refreshedClients,
         selectedClientIds: retainedClientIds,
-        removedCount: previousSelectedIds.size - retainedClientIds.size,
       };
     } catch (loadError) {
       if (sequence === loadSequence.current && loadError.message !== "Unauthorized")
@@ -520,13 +532,21 @@ export default function OverduePortfolioView() {
         const detail = payload.detail;
         const code = typeof detail === "object" ? detail?.code : detail;
         if (code === "collection_candidates_changed") {
+          const previousSelectionKeys = new Set(
+            messageSelection.ready.map(messageSelectionKey),
+          );
+          const missingKeys = new Set(
+            Array.isArray(detail?.missing_selections)
+              ? detail.missing_selections.map(messageSelectionKey)
+              : [],
+          );
           const refreshed = await load(selectedClientIds);
           const refreshedSelections = refreshed
             ? messageSelectionsFor(
                 refreshed.clients,
                 refreshed.selectedClientIds,
                 projectFilter,
-              )
+              ).filter((selection) => !missingKeys.has(messageSelectionKey(selection)))
             : [];
 
           if (!refreshedSelections.length) {
@@ -537,9 +557,30 @@ export default function OverduePortfolioView() {
             return;
           }
 
+          const retainedSelectionKeys = new Set(
+            refreshedSelections.map(messageSelectionKey),
+          );
+          const removedSelection = [...previousSelectionKeys].some(
+            (key) => !retainedSelectionKeys.has(key),
+          );
+          const retainedClientIds = new Set(
+            refreshed.clients
+              .filter(
+                (client) =>
+                  refreshed.selectedClientIds.has(client.id) &&
+                  client.lots.some((lot) => {
+                    const selection = messageSelectionFor(client, lot);
+                    return selection && retainedSelectionKeys.has(messageSelectionKey(selection));
+                  }),
+              )
+              .map((client) => client.id),
+          );
+          setSelectedClientIds(retainedClientIds);
+
           setMessageSelection({
             ready: refreshedSelections,
-            notice: refreshed.removedCount > 0
+            notice:
+              missingKeys.size > 0 || removedSelection
               ? "Algunos clientes no recibirán mensajes porque ya no cuentan con cuotas atrasadas."
               : "",
           });
