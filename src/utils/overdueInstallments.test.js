@@ -30,6 +30,15 @@ test('no mezcla el mismo mes de años diferentes y conserva la fecha más antigu
   ]);
 });
 
+test('usa fecha_compromiso para distinguir cuotas vencidas y futuras del mismo mes', () => {
+  const groups = groupOverdueInstallments([
+    { fecha_pago: '2026-10-01', fecha_compromiso: '2026-10-28', saldo: 100 },
+    { fecha_pago: '2026-10-02', fecha_compromiso: '2026-10-31', saldo: 200 },
+  ]);
+  assert.equal(groups[0].dueDate, '2026-10-28');
+  assert.deepEqual(groups[0].dueDates, ['2026-10-28', '2026-10-31']);
+});
+
 test('genera las columnas requeridas por la campaña de cobros desde Consulta SAP', () => {
   assert.deepEqual(campaignDebtColumns({
     pendingTotal: 1000,

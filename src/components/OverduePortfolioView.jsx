@@ -92,7 +92,10 @@ const normalizeClients = (payload) => {
               ["lote", "nombre_lote", "codigo_lote"],
               "Lote sin nombre",
             ),
-            overdueInstallments: installments.length,
+            overdueInstallments: installments.reduce(
+              (count, installment) => count + installment.dueDates.filter((date) => daysUntilPayment(date) < 0).length,
+              0,
+            ),
             pendingTotal: amount(lot, [
               "total_pendiente_lote",
               "total_pendiente",
@@ -154,8 +157,8 @@ function messageSelectionKey(selection) {
   ]);
 }
 
-function messageSelectionsFor(clients, selectedClientIds, projectFilter) {
-  const selectionsByKey = new Map();
+function messageTargetsFor(clients, selectedClientIds, projectFilter) {
+  const targetsByKey = new Map();
 
   clients
     .filter((client) => selectedClientIds.has(client.id))
@@ -164,28 +167,19 @@ function messageSelectionsFor(clients, selectedClientIds, projectFilter) {
         .filter((lot) => !projectFilter || lot.project === projectFilter)
         .forEach((lot) => {
           const selection = messageSelectionFor(client, lot);
-          if (selection) selectionsByKey.set(messageSelectionKey(selection), selection);
+          if (!selection) return;
+          const key = messageSelectionKey(selection);
+          const target = targetsByKey.get(key) || { selection, dueDates: new Set() };
+          lot.installments.forEach((installment) => {
+            (installment.dueDates || [installment.dueDate]).forEach((date) => {
+              if (daysUntilPayment(date) !== null) target.dueDates.add(date);
+            });
+          });
+          targetsByKey.set(key, target);
         });
     });
 
-  return [...selectionsByKey.values()];
-}
-
-function withoutRejectedProjects(clients, rejectedKeys) {
-  if (!rejectedKeys.size) return clients;
-  return clients.flatMap((client) => {
-    const lots = client.lots.filter((lot) => {
-      const selection = messageSelectionFor(client, lot);
-      return !selection || !rejectedKeys.has(messageSelectionKey(selection));
-    });
-    if (!lots.length) return [];
-    return [{
-      ...client,
-      lots,
-      overdueInstallments: lots.reduce((total, lot) => total + lot.overdueInstallments, 0),
-      pendingTotal: lots.reduce((total, lot) => total + lot.pendingTotal, 0),
-    }];
-  });
+  return [...targetsByKey.values()];
 }
 
 export default function OverduePortfolioView() {
@@ -208,6 +202,7 @@ export default function OverduePortfolioView() {
   const [campaignError, setCampaignError] = useState("");
   const [messageSelection, setMessageSelection] = useState(null);
   const [sendingMessages, setSendingMessages] = useState(false);
+  const [preparingMessages, setPreparingMessages] = useState(false);
   const [messageError, setMessageError] = useState("");
   const [messageSuccess, setMessageSuccess] = useState("");
   const [clientQuery, setClientQuery] = useState("");
@@ -216,7 +211,6 @@ export default function OverduePortfolioView() {
   const [portfolioFilter, setPortfolioFilter] = useState('todo');
   const selectAllRef = useRef(null);
   const loadSequence = useRef(0);
-  const rejectedSelectionKeys = useRef(new Set());
 
   const load = useCallback(async (idsToPreserve = null) => {
     if (!authToken) return;
@@ -245,10 +239,7 @@ export default function OverduePortfolioView() {
       }
       const payload = await response.json();
       if (sequence !== loadSequence.current) return;
-      const refreshedClients = withoutRejectedProjects(
-        normalizeClients(payload),
-        rejectedSelectionKeys.current,
-      );
+      const refreshedClients = normalizeClients(payload);
       const availableClientIds = new Set(refreshedClients.map((client) => client.id));
       const retainedClientIds = new Set(
         [...previousSelectedIds].filter((id) => availableClientIds.has(id)),
@@ -517,134 +508,138 @@ export default function OverduePortfolioView() {
     }
   };
 
-  const prepareMessageSend = () => {
-    if (!selectedClients.length) return;
-    if (selectedClients.some(client => client.source === 'edificios')) {
+  const prepareMessageSend = async (sourceClients = clients, sourceIds = selectedClientIds) => {
+    const selected = sourceClients.filter((client) => sourceIds.has(client.id));
+    if (!selected.length) return;
+    if (selected.some(client => client.source === 'edificios')) {
       setMessageError('El envío de mensajes desde esta pantalla está disponible para Lotes. Selecciona registros de Lotes para continuar.');
       return;
     }
     setMessageError("");
     setMessageSuccess("");
-    const selections = messageSelectionsFor(
-      clients,
-      selectedClientIds,
-      projectFilter,
-    );
-    if (!selections.length) {
-      setMessageError("Los clientes seleccionados no tienen empresa, proyecto o identificación suficientes para preparar el cobro.");
-      return;
+    setPreparingMessages(true);
+    try {
+      const targets = messageTargetsFor(sourceClients, sourceIds, projectFilter);
+      if (!targets.length) throw new Error("Los clientes seleccionados no tienen empresa, proyecto o identificación suficientes para preparar mensajes.");
+      const collections = [];
+      const remindersByDate = new Map();
+      let skipped = 0;
+      targets.forEach(({ selection, dueDates }) => {
+        const dates = [...dueDates].map((date) => ({ date, days: daysUntilPayment(date) }));
+        if (dates.some(({ days }) => days < 0)) {
+          collections.push(selection);
+          return;
+        }
+        const next = dates.filter(({ days }) => days >= 0 && days <= 3)
+          .sort((a, b) => a.days - b.days)[0];
+        if (!next) {
+          skipped += 1;
+          return;
+        }
+        const pending = remindersByDate.get(next.date) || [];
+        pending.push(selection);
+        remindersByDate.set(next.date, pending);
+      });
+      const groups = [];
+      const candidateLists = await Promise.all([...remindersByDate].map(async ([dueDate, selections]) => {
+        const response = await apiFetch(`/api/v1/cobros/reminders/candidates?due_date=${encodeURIComponent(dueDate)}`, {
+          token: authToken,
+          onUnauthorized: logout,
+        });
+        const payload = await response.json().catch(() => []);
+        if (!response.ok) throw new Error("No se pudieron verificar los recordatorios en SAP.");
+        const candidates = Array.isArray(payload) ? payload : [];
+        const deliveryKeys = [];
+        selections.forEach((selection) => {
+          const sameCustomer = (item) =>
+            searchable(item.company_name) === searchable(selection.company_name) &&
+            (selection.customer_code
+              ? searchable(item.customer_code) === searchable(selection.customer_code)
+              : searchable(item.customer_name) === searchable(selection.customer_name));
+          if (collections.some(sameCustomer)) return;
+          const candidate = candidates.find((item) =>
+            String(item.due_date).slice(0, 10) === dueDate &&
+            sameCustomer(item) &&
+            searchable(item.project_name) === searchable(selection.project_name) &&
+            item.delivery_key
+          );
+          if (candidate) {
+            deliveryKeys.push(candidate.delivery_key);
+            return;
+          }
+          const overdue = candidates.filter((item) => sameCustomer(item) && daysUntilPayment(item.due_date) < 0);
+          if (!overdue.length) {
+            skipped += 1;
+            return;
+          }
+          overdue.forEach((item) => collections.push({
+            company_name: item.company_name,
+            project_name: item.project_name,
+            ...(item.customer_code ? { customer_code: item.customer_code } : { customer_name: item.customer_name }),
+          }));
+        });
+        return { dueDate, deliveryKeys: [...new Set(deliveryKeys)] };
+      }));
+      const uniqueCollections = [...new Map(collections.map((item) => [messageSelectionKey(item), item])).values()];
+      if (uniqueCollections.length) groups.push({ type: "Cobro", body: { collection_selections: uniqueCollections }, count: uniqueCollections.length });
+      candidateLists.forEach(({ dueDate, deliveryKeys }) => {
+        if (deliveryKeys.length) groups.push({ type: "Recordatorio", body: { due_date: dueDate, delivery_keys: deliveryKeys }, count: deliveryKeys.length });
+      });
+      if (!groups.length) throw new Error("Ninguno de los clientes seleccionados tiene cuotas vencidas ni recordatorios disponibles para los próximos 3 días.");
+      setMessageSelection({ groups, skipped });
+    } catch (prepareError) {
+      if (prepareError.message !== "Unauthorized") setMessageError(prepareError.message || "No se pudieron preparar los mensajes.");
+    } finally {
+      setPreparingMessages(false);
     }
-    setMessageSelection({ ready: selections });
   };
 
   const sendSelectedMessages = async () => {
-    if (!messageSelection?.ready?.length || sendingMessages) return;
+    if (!messageSelection?.groups?.length || sendingMessages) return;
     setSendingMessages(true);
     setMessageError("");
+    let queuedCount = 0;
     try {
-      const response = await apiFetch("/api/v1/cobros/reminders/send", {
-        method: "POST",
-        token: authToken,
-        onUnauthorized: logout,
-        body: { collection_selections: messageSelection.ready },
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const detail = payload.detail;
-        const code = typeof detail === "object" ? detail?.code : detail;
-        if (code === "collection_candidates_changed") {
-          const previousSelectionKeys = new Set(
-            messageSelection.ready.map(messageSelectionKey),
-          );
-          const missingKeys = new Set(
-            Array.isArray(detail?.missing_selections)
-              ? detail.missing_selections.map(messageSelectionKey)
-              : [],
-          );
-          missingKeys.forEach((key) => rejectedSelectionKeys.current.add(key));
-          const refreshed = await load(selectedClientIds);
-          if (!refreshed) {
-            setMessageSelection(null);
-            setMessageError("No se pudo actualizar la cartera. Intenta nuevamente antes de enviar.");
-            return;
+      for (const group of messageSelection.groups) {
+        const response = await apiFetch("/api/v1/cobros/reminders/send", {
+          method: "POST",
+          token: authToken,
+          onUnauthorized: logout,
+          body: group.body,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const detail = payload.detail;
+          const code = typeof detail === "object" ? detail?.code : detail;
+          if (code === "collection_candidates_changed" || code === "reminder_candidates_changed") {
+            if (!queuedCount) {
+              const refreshed = await load(selectedClientIds);
+              setMessageSelection(null);
+              if (refreshed) await prepareMessageSend(refreshed.clients, refreshed.selectedClientIds);
+              else setMessageError("No se pudo actualizar la cartera. Intenta nuevamente.");
+              return;
+            }
+            throw new Error("La cartera cambió después de encolar algunos mensajes. Actualiza y revisa los mensajes pendientes antes de continuar.");
           }
-          const refreshedSelections = messageSelectionsFor(
-            refreshed.clients,
-            refreshed.selectedClientIds,
-            projectFilter,
-          );
-
-          if (!refreshedSelections.length) {
-            setSelectedClientIds(new Set());
-            setMessageSelection(null);
-            setMessageError(
-              "La cartera cambió. No se enviarán mensajes porque ninguno de los clientes seleccionados cuenta con cuotas atrasadas en este momento.",
-            );
-            return;
+          if (code === "selected_reminders_not_ready") {
+            const unavailable = detail?.candidates || [];
+            const reasons = unavailable.map((item) => [item.customer_name || item.customer_code, item.unavailable_reason].filter(Boolean).join(": "));
+            throw new Error(reasons.length ? reasons.join(". ") : detail?.message || "Falta teléfono o configuración de envío.");
           }
-
-          const retainedSelectionKeys = new Set(
-            refreshedSelections.map(messageSelectionKey),
-          );
-          const removedSelection = [...previousSelectionKeys].some(
-            (key) => !retainedSelectionKeys.has(key),
-          );
-          const retainedClientIds = new Set(
-            refreshed.clients
-              .filter(
-                (client) =>
-                  refreshed.selectedClientIds.has(client.id) &&
-                  client.lots.some((lot) => {
-                    const selection = messageSelectionFor(client, lot);
-                    return selection && retainedSelectionKeys.has(messageSelectionKey(selection));
-                  }),
-              )
-              .map((client) => client.id),
-          );
-          setSelectedClientIds(retainedClientIds);
-
-          setMessageSelection({
-            ready: refreshedSelections,
-            notice:
-              missingKeys.size > 0 || removedSelection
-              ? "Algunos clientes no recibirán mensajes porque ya no cuentan con cuotas atrasadas."
-              : "",
-          });
-          return;
+          throw new Error(typeof detail === "string" ? detail : detail?.message || "No se pudieron encolar los mensajes.");
         }
-        if (code === "selected_reminders_not_ready") {
-          const unavailable = detail?.unavailable || detail?.not_ready || detail?.reminders || [];
-          const reasons = Array.isArray(unavailable)
-            ? unavailable.map((item) => [
-                item.customer_name || item.customer_code || item.name || "Cliente",
-                item.unavailable_reason || item.reason || item.detail,
-              ].filter(Boolean).join(": ")).filter(Boolean)
-            : [];
-          throw new Error(
-            reasons.length
-              ? `No se pueden enviar algunos mensajes: ${reasons.join(". ")}`
-              : detail?.message || "Algunos clientes no tienen teléfono válido o una configuración activa de imagen e instancia.",
-          );
-        }
-        throw new Error(
-          typeof detail === "string"
-            ? detail
-            : detail?.message || payload.message || "No se pudieron encolar los mensajes.",
-        );
+        queuedCount += payload.selected_count ?? group.count;
+        setMessageSelection((current) => current ? { ...current, groups: current.groups.slice(1) } : null);
       }
-      const count =
-        payload.selected_count ??
-        payload.queued_count ??
-        messageSelection.ready.length;
       setMessageSuccess(
-        `${count} mensaje${count === 1 ? "" : "s"} encolado${count === 1 ? "" : "s"} para envío.`,
+        `${queuedCount} selección${queuedCount === 1 ? "" : "es"} encolada${queuedCount === 1 ? "" : "s"} para envío.`,
       );
       setMessageSelection(null);
       setSelectedClientIds(new Set());
     } catch (requestError) {
       if (requestError.message !== "Unauthorized")
         setMessageError(
-          requestError.message || "No se pudieron encolar los mensajes.",
+          `${queuedCount ? `${queuedCount} mensaje(s) ya encolado(s). ` : ""}${requestError.message || "No se pudieron encolar los mensajes."}`,
         );
     } finally {
       setSendingMessages(false);
@@ -660,7 +655,7 @@ export default function OverduePortfolioView() {
             <p className="text-sm text-gray-500 mt-1">
               {loading
                 ? "Consultando cartera externa..."
-                : `${visibleClients.length} de ${clients.length} ${clients.length === 1 ? "cliente con saldo vencido" : "clientes con saldo vencido"}`}
+                : `${visibleClients.length} de ${clients.length} ${clients.length === 1 ? "cliente con saldo pendiente" : "clientes con saldo pendiente"}`}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -686,14 +681,14 @@ export default function OverduePortfolioView() {
               {selectedClientIds.size ? ` (${selectedClientIds.size})` : ""}
             </button>
             <button
-              onClick={prepareMessageSend}
+              onClick={() => prepareMessageSend()}
               disabled={
-                loading || selectedClientIds.size === 0 || sendingMessages
+                loading || selectedClientIds.size === 0 || sendingMessages || preparingMessages
               }
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0B5A8E] px-4 py-2 text-sm font-medium text-white hover:bg-[#053E68] disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
-              Enviar Mensaje
+              {preparingMessages ? "Verificando…" : "Enviar Mensaje"}
               {selectedClientIds.size ? ` (${selectedClientIds.size})` : ""}
             </button>
           </div>
@@ -1104,7 +1099,7 @@ export default function OverduePortfolioView() {
                   ¿Enviar mensajes?
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Se enviarán recordatorios reales por WhatsApp.
+                  Se enviarán cobros y/o recordatorios según la fecha de vencimiento.
                 </p>
               </div>
               <button
@@ -1119,15 +1114,19 @@ export default function OverduePortfolioView() {
             <div className="space-y-2 p-6 text-sm text-slate-600">
               <p>
                 <b className="text-slate-800">
-                  {messageSelection.ready.length}
+                  {messageSelection.groups.reduce((total, group) => total + group.count, 0)}
                 </b>{" "}
-                mensajes listos para encolar.
+                selecciones listas para encolar. Si hay cuotas vencidas y próximas del mismo cliente y empresa, se incluirán en un mismo mensaje.
               </p>
-              {messageSelection.notice && (
+              {messageSelection.groups.map((group, index) => (
+                <p key={`${group.type}-${index}`}>{group.count} de {group.type.toLowerCase()}{group.count === 1 ? "" : "s"}{group.body.due_date ? ` (vencen ${group.body.due_date})` : ""}</p>
+              ))}
+              {messageSelection.skipped > 0 && (
                 <p className="rounded-lg bg-amber-50 p-3 text-amber-800">
-                  {messageSelection.notice}
+                  {messageSelection.skipped} selección(es) no se enviarán: su cuota aún no entra en los próximos 3 días o no aparece como recordatorio disponible en SAP.
                 </p>
               )}
+              {messageError && <p className="rounded-lg bg-red-50 p-3 text-red-700">{messageError}</p>}
             </div>
             <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
               <button

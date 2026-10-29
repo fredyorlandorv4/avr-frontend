@@ -24,7 +24,7 @@ export function groupOverdueInstallments(installments) {
   const groups = new Map();
 
   installments.forEach((installment, index) => {
-    const dueDate = field(installment, ['fecha_pago', 'fecha_compromiso', 'fecha_vencimiento']);
+    const dueDate = field(installment, ['fecha_compromiso', 'fecha_vencimiento', 'fecha_pago']);
     const date = validDate(dueDate);
     const key = date ? `${date.year}-${String(date.month).padStart(2, '0')}` : `sin-fecha-${index}`;
     const balance = Number(field(installment, ['total_a_pagar', 'saldo', 'monto_pendiente'], 0)) || 0;
@@ -32,6 +32,7 @@ export function groupOverdueInstallments(installments) {
 
     if (group) {
       group.totalCents += Math.round(balance * 100);
+      if (date && balance > 0) group.dueDates.add(dueDate);
       // Ante varias fechas del mismo mes se muestra la primera que vence.
       if (String(dueDate) < String(group.dueDate)) {
         group.dueDate = dueDate;
@@ -44,6 +45,7 @@ export function groupOverdueInstallments(installments) {
         age: field(installment, ['antiguedad'], '—'),
         concept: date ? `Cuota ${monthNames[date.month - 1]}` : field(installment, ['concepto', 'description'], '—'),
         totalCents: Math.round(balance * 100),
+        dueDates: new Set(date && balance > 0 ? [dueDate] : []),
       });
     }
   });
@@ -52,6 +54,7 @@ export function groupOverdueInstallments(installments) {
     .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))
     .map((group, index) => ({
       ...group,
+      dueDates: [...group.dueDates].sort(),
       number: index + 1,
       total: group.totalCents / 100,
     }));
