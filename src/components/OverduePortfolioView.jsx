@@ -802,6 +802,12 @@ export default function OverduePortfolioView() {
               <tbody className="divide-y divide-gray-100">
                 {visibleClients.map((client) => {
                   const clientExpanded = expandedClients.has(client.id);
+                  const displayCompany = client.source === "edificios"
+                    ? [...new Set(client.lots
+                        .filter((lot) => !projectFilter || lot.project === projectFilter)
+                        .map((lot) => lot.project)
+                        .filter(Boolean))].join(", ") || "Proyecto sin nombre"
+                    : client.company;
                   return (
                     <Fragment key={client.id}>
                       <tr key={client.id} className="hover:bg-gray-50">
@@ -820,7 +826,7 @@ export default function OverduePortfolioView() {
                           </p>
                           <span className="text-xs text-[#0B5F8F]">{client.source === 'edificios' ? 'Edificios' : 'Lotes'}</span>
                           <p className="text-xs text-gray-500 mt-0.5">
-                            {[client.company, client.code]
+                            {[displayCompany, client.code]
                               .filter(Boolean)
                               .join(" · ") || "Sin empresa o código registrado"}
                           </p>
