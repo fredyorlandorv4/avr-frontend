@@ -5,6 +5,7 @@ import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { messagingType, matchesMessagingType } from "../utils/messagingType.js";
 import { MESSAGING_PAGE_SIZE, messagingDateRange, messagingPage } from "../utils/messagingPagination.js";
+import MessagingDateFilter from "./MessagingDateFilter.jsx";
 
 const todayInGuatemala = () => {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -338,18 +339,10 @@ export default function MessagingQueueView() {
           {error}
         </p>
       )}
-      <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="text-sm font-medium text-slate-700">
-          Desde
-          <input type="date" value={dateStart} onChange={(event) => { setDateStart(event.target.value); setMessagePage(1); setRunPage(1); }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700" />
-        </label>
-        <label className="text-sm font-medium text-slate-700">
-          Hasta <span className="font-normal text-slate-500">(opcional)</span>
-          <input type="date" value={dateEnd} onChange={(event) => { setDateEnd(event.target.value); setMessagePage(1); setRunPage(1); }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700" />
-        </label>
-        <button type="button" onClick={() => { setDateStart(todayInGuatemala()); setDateEnd(""); setMessagePage(1); setRunPage(1); }} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">Hoy</button>
-        <p className="text-sm text-slate-500">Elige una fecha o completa ambas para consultar un rango.</p>
-        {invalidRange && <p role="alert" className="w-full text-sm text-red-700">La fecha final debe ser igual o posterior a la inicial.</p>}
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <span className="text-sm font-medium text-slate-700">Fecha de ejecución</span>
+        <MessagingDateFilter from={from} to={to} today={todayInGuatemala()} onApply={(start, end) => { setDateStart(start); setDateEnd(end); setMessagePage(1); setRunPage(1); }} />
+        <p className="text-sm text-slate-500">Selecciona un día o un rango para consultar el historial.</p>
       </div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-6 py-4">
