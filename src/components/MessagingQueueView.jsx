@@ -4,6 +4,7 @@ import { MessageSquare, RefreshCw, X } from "lucide-react";
 import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { messagingType, matchesMessagingType } from "../utils/messagingType.js";
+import { MESSAGING_PAGE_SIZE, messagingDateRange, messagingPage } from "../utils/messagingPagination.js";
 
 const todayInGuatemala = () => {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -26,14 +27,6 @@ const listFrom = (value) =>
   Array.isArray(value) ? value : value?.items || value?.results || value?.data || [];
 const runDateOf = (run) =>
   String(run.run_date || run.queried_at || run.created_at || "").slice(0, 10);
-const ACTIVE_RUN_STATUSES = new Set([
-  "queued",
-  "pending",
-  "processing",
-  "sending",
-  "running",
-  "in_progress",
-]);
 const lotsOf = (delivery) =>
   (Array.isArray(delivery.lotes) ? delivery.lotes : [])
     .map((lot) => (typeof lot === "string" ? lot : lot?.lote))
@@ -56,6 +49,21 @@ function statusOf(delivery) {
   if (status === "failed")
     return { label: "Fallido", className: "bg-red-100 text-red-800" };
   return { label: status || "—", className: "bg-slate-100 text-slate-700" };
+}
+
+function Pagination({ page, total, onChange }) {
+  const pages = Math.max(1, Math.ceil(total / MESSAGING_PAGE_SIZE));
+  const current = Math.min(page, pages);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-4 text-sm text-slate-600">
+      <span>{total ? `${(current - 1) * MESSAGING_PAGE_SIZE + 1}–${Math.min(current * MESSAGING_PAGE_SIZE, total)} de ${total}` : "0 registros"}</span>
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => onChange(current - 1)} disabled={current <= 1} className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Anterior</button>
+        <span>Página {current} de {pages}</span>
+        <button type="button" onClick={() => onChange(current + 1)} disabled={current >= pages} className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Siguiente</button>
+      </div>
+    </div>
+  );
 }
 
 function MessageDetail({ delivery, imageUrl, onClose }) {
@@ -176,16 +184,23 @@ export default function MessagingQueueView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [dateStart, setDateStart] = useState(todayInGuatemala);
+  const [dateEnd, setDateEnd] = useState("");
+  const [messagePage, setMessagePage] = useState(1);
+  const [runPage, setRunPage] = useState(1);
   const requestInFlight = useRef(false);
+  const requestSequence = useRef(0);
+  const { from, to, invalid: invalidRange } = messagingDateRange(dateStart, dateEnd, todayInGuatemala());
 
   const load = useCallback(
     async (quiet = false) => {
-      if (!authToken || requestInFlight.current) return;
+      if (!authToken || invalidRange || (quiet && requestInFlight.current)) return;
+      const sequence = ++requestSequence.current;
       requestInFlight.current = true;
       if (!quiet) setLoading(true);
       try {
         const [runsResponse, projectsResponse] = await Promise.all([
-          apiFetch("/api/v1/cobros/reminders/runs", {
+          apiFetch(`/api/v1/cobros/reminders/runs?${new URLSearchParams({ date_from: from, date_to: to })}`, {
             token: authToken,
             onUnauthorized: logout,
           }),
@@ -200,53 +215,65 @@ export default function MessagingQueueView() {
           runsResponse.json(),
           projectsResponse.json(),
         ]);
-        const today = todayInGuatemala();
-        // Los envíos manuales pueden no traer run_date. Se muestran siempre
-        // mientras están activos y se conservan los de la fecha actual.
-        const todayRuns = listFrom(runsPayload).filter((item) =>
-          runDateOf(item) === today ||
-          ACTIVE_RUN_STATUSES.has(String(item.status || item.estado || "").toLowerCase()),
-        );
-        const todayDeliveries = [];
-        for (const run of todayRuns) {
-          let offset = 0;
-          while (true) {
-            const response = await apiFetch(
-              `/api/v1/cobros/reminders/runs/${run.id}/deliveries?limit=500&offset=${offset}`,
-              { token: authToken, onUnauthorized: logout },
-            );
-            if (!response.ok)
-              throw new Error("No se pudieron cargar las entregas de hoy.");
-            const page = listFrom(await response.json());
-            todayDeliveries.push(...page);
-            if (page.length < 500) break;
-            offset += page.length;
+        const periodRuns = listFrom(runsPayload);
+        const periodDeliveries = [];
+        let nextRun = 0;
+        const loadDeliveries = async () => {
+          while (nextRun < periodRuns.length) {
+            const run = periodRuns[nextRun++];
+            let offset = 0;
+            while (true) {
+              const response = await apiFetch(
+                `/api/v1/cobros/reminders/runs/${run.id}/deliveries?limit=500&offset=${offset}`,
+                { token: authToken, onUnauthorized: logout },
+              );
+              if (!response.ok)
+                throw new Error("No se pudieron cargar las entregas del período.");
+              const page = listFrom(await response.json());
+              periodDeliveries.push(...page);
+              if (page.length < 500) break;
+              offset += page.length;
+            }
           }
-        }
-        setRuns(todayRuns);
-        setDeliveries(todayDeliveries);
+        };
+        await Promise.all(Array.from({ length: Math.min(4, periodRuns.length) }, loadDeliveries));
+        if (sequence !== requestSequence.current) return;
+        periodDeliveries.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")) || Number(b.id) - Number(a.id));
+        setRuns(periodRuns);
+        setDeliveries(periodDeliveries);
         setProjects(
           listFrom(configuredProjects),
         );
         setError("");
       } catch (requestError) {
-        if (requestError.message !== "Unauthorized")
+        if (sequence === requestSequence.current && requestError.message !== "Unauthorized") {
+          if (!quiet) {
+            setRuns([]);
+            setDeliveries([]);
+          }
           setError(
             requestError.message || "No se pudieron cargar los mensajes.",
           );
+        }
       } finally {
-        requestInFlight.current = false;
-        if (!quiet) setLoading(false);
+        if (sequence === requestSequence.current) {
+          requestInFlight.current = false;
+          setLoading(false);
+        }
       }
     },
-    [authToken, logout],
+    [authToken, logout, from, to, invalidRange],
   );
 
   useEffect(() => {
     load();
-    const interval = window.setInterval(() => load(true), 5000);
-    return () => window.clearInterval(interval);
-  }, [load]);
+    const interval = to >= todayInGuatemala() ? window.setInterval(() => load(true), 5000) : null;
+    return () => {
+      requestSequence.current += 1;
+      requestInFlight.current = false;
+      if (interval) window.clearInterval(interval);
+    };
+  }, [load, to]);
 
   const imagesByProject = useMemo(
     () =>
@@ -271,9 +298,12 @@ export default function MessagingQueueView() {
     const dates = new Map(runs.map((run) => [String(run.id), runDateOf(run)]));
     return deliveries.map((delivery) => ({
       ...delivery,
+      runDate: dates.get(String(delivery.run_id)) || "",
       displayType: messagingType(delivery, dates.get(String(delivery.run_id))),
     })).filter((delivery) => matchesMessagingType(delivery.displayType, typeFilter));
   }, [deliveries, runs, typeFilter]);
+  const { current: messagePageNumber, items: pageDeliveries } = messagingPage(visibleDeliveries, messagePage);
+  const { current: runPageNumber, items: pageRuns } = messagingPage(runs, runPage);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-5 pb-8">
@@ -283,10 +313,9 @@ export default function MessagingQueueView() {
             <MessageSquare className="h-6 w-6 text-[#F4CD04]" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Mensajería de hoy</h2>
+            <h2 className="text-xl font-semibold">Mensajería</h2>
             <p className="mt-1 text-sm text-blue-100">
-              Mensajes del {todayInGuatemala()} · actualización automática cada
-              5 segundos
+              Mensajes y ejecuciones del período seleccionado
             </p>
           </div>
         </div>
@@ -309,6 +338,19 @@ export default function MessagingQueueView() {
           {error}
         </p>
       )}
+      <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <label className="text-sm font-medium text-slate-700">
+          Desde
+          <input type="date" value={dateStart} onChange={(event) => { setDateStart(event.target.value); setMessagePage(1); setRunPage(1); }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700" />
+        </label>
+        <label className="text-sm font-medium text-slate-700">
+          Hasta <span className="font-normal text-slate-500">(opcional)</span>
+          <input type="date" value={dateEnd} onChange={(event) => { setDateEnd(event.target.value); setMessagePage(1); setRunPage(1); }} className="mt-1 block rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700" />
+        </label>
+        <button type="button" onClick={() => { setDateStart(todayInGuatemala()); setDateEnd(""); setMessagePage(1); setRunPage(1); }} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">Hoy</button>
+        <p className="text-sm text-slate-500">Elige una fecha o completa ambas para consultar un rango.</p>
+        {invalidRange && <p role="alert" className="w-full text-sm text-red-700">La fecha final debe ser igual o posterior a la inicial.</p>}
+      </div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-6 py-4">
           <div>
@@ -322,7 +364,7 @@ export default function MessagingQueueView() {
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm text-slate-600">
               Tipo de mensaje{" "}
-              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+              <select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
                 <option value="all">Todos</option>
                 <option value="collection">Cobros</option>
                 <option value="reminder">Recordatorios</option>
@@ -336,16 +378,17 @@ export default function MessagingQueueView() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] table-fixed text-left text-sm">
             <colgroup>
-              <col className="w-[17%]" />
-              <col className="w-[15%]" />
-              <col className="w-[15%]" />
+              <col className="w-[11%]" />
+              <col className="w-[16%]" />
               <col className="w-[13%]" />
-              <col className="w-[28%]" />
+              <col className="w-[13%]" />
               <col className="w-[12%]" />
+              <col className="w-[24%]" />
+              <col className="w-[11%]" />
             </colgroup>
             <thead className="bg-[#053E68] text-white">
               <tr>
-                {["Cliente", "Proyecto", "Lote", "Tipo", "Mensaje", "Status"].map(
+                {["Fecha", "Cliente", "Proyecto", "Lote", "Tipo", "Mensaje", "Status"].map(
                   (header) => (
                     <th key={header} className="px-4 py-3 font-semibold">
                       {header}
@@ -355,20 +398,23 @@ export default function MessagingQueueView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? (
+              {invalidRange ? (
+                <tr><td colSpan="7" className="px-4 py-12 text-center text-slate-500">Selecciona un rango válido.</td></tr>
+              ) : loading ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     Cargando mensajes…
                   </td>
                 </tr>
               ) : visibleDeliveries.length ? (
-                visibleDeliveries.map((delivery) => {
+                pageDeliveries.map((delivery) => {
                   const status = statusOf(delivery);
                   return (
                     <tr key={delivery.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-slate-700">{delivery.runDate || "—"}</td>
                       <td
                         className="truncate px-4 py-3 font-medium text-slate-800"
                         title={delivery.nombre_cliente}
@@ -419,20 +465,45 @@ export default function MessagingQueueView() {
               ) : (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     {deliveries.length && typeFilter !== "all"
                       ? "No hay mensajes de este tipo."
                       : runs.length
-                      ? "Los mensajes del envío manual aún se están preparando."
-                      : "Aún no se han encolado mensajes hoy."}
+                      ? "No hay mensajes registrados para estas ejecuciones."
+                      : "No hay mensajes para el período seleccionado."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        {!invalidRange && !loading && <Pagination page={messagePageNumber} total={visibleDeliveries.length} onChange={setMessagePage} />}
+      </section>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-6 py-4">
+          <h3 className="font-semibold text-[#053E68]">Ejecuciones del período</h3>
+          <p className="mt-1 text-sm text-slate-500">Aceptado indica que Evolution aceptó el envío; no confirma la entrega ni la lectura.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-[#053E68] text-white"><tr>{["Fecha", "Vencimiento", "Candidatos", "Aceptados", "Fallidos", "Estado", "Error"].map((header) => <th key={header} className="px-4 py-3 font-semibold">{header}</th>)}</tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {invalidRange || loading ? <tr><td colSpan="7" className="px-4 py-8 text-center text-slate-500">{invalidRange ? "Selecciona un rango válido." : "Cargando ejecuciones…"}</td></tr>
+                : pageRuns.length ? pageRuns.map((run) => <tr key={run.id}>
+                  <td className="px-4 py-3">{runDateOf(run) || "—"}</td>
+                  <td className="px-4 py-3">{run.target_due_date || "—"}</td>
+                  <td className="px-4 py-3">{run.candidates ?? 0}</td>
+                  <td className="px-4 py-3">{run.accepted ?? 0}</td>
+                  <td className="px-4 py-3">{run.failed ?? 0}</td>
+                  <td className="px-4 py-3">{run.status || "—"}</td>
+                  <td className="px-4 py-3 text-red-700">{run.error_message || "—"}</td>
+                </tr>) : <tr><td colSpan="7" className="px-4 py-8 text-center text-slate-500">No hay ejecuciones para el período seleccionado.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {!invalidRange && !loading && <Pagination page={runPageNumber} total={runs.length} onChange={setRunPage} />}
       </section>
       {selected && (
         <MessageDetail

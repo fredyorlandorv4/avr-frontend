@@ -5,6 +5,7 @@ import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 import AreaFilter from './AreaFilter.jsx';
 import { CallListSkeleton } from './Skeleton.jsx';
+import { hasCallAnalysis } from '../utils/callAnalysis.js';
 
 const getRecordingUrl = (callId) => `/api/v1/calls/${callId}/recording/download`;
 
@@ -637,6 +638,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
                       <FileText className="w-4 h-4" />
                       Transcripción
                     </button>
+                    {hasCallAnalysis(call.analysis) && (
                     <button
                       onClick={() => onViewAnalysis(call)}
                       className="flex items-center gap-1 px-3 py-1.5 text-sm bg-[#053E68]/5 text-[#053E68] rounded-lg hover:bg-[#053E68]/10 transition"
@@ -644,6 +646,7 @@ export default function CallsMonitorView({ onViewTranscription, onViewAnalysis }
                       <BarChart3 className="w-4 h-4" />
                       Análisis
                     </button>
+                    )}
 
                     {hasRecording && (
                       <button

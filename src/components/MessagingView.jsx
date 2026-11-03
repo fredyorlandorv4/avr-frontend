@@ -1,8 +1,6 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BellRing,
-  ChevronDown,
-  ChevronRight,
   FileImage,
   Pencil,
   RefreshCw,
@@ -11,7 +9,6 @@ import {
 } from "lucide-react";
 import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import { formatMessagingLots } from "../utils/messagingHistory.js";
 
 const initialForm = {
   company_name: "",
@@ -35,11 +32,6 @@ const valueOf = (object, keys, fallback = "—") =>
   fallback;
 const asBoolean = (value) =>
   value === true || value === 1 || value === "true" || value === "1";
-const money = new Intl.NumberFormat("es-GT", {
-  style: "currency",
-  currency: "GTQ",
-});
-
 async function backendError(response, fallback) {
   const payload = await response.json().catch(() => ({}));
   const detail =
@@ -168,15 +160,12 @@ export default function MessagingView() {
   const [promptEditors, setPromptEditors] = useState(initialPromptEditors);
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [projects, setProjects] = useState([]);
-  const [runs, setRuns] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [editingProject, setEditingProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [selectedImageUrl, setSelectedImageUrl] = useState("");
-  const [expandedRuns, setExpandedRuns] = useState(new Set());
-  const [deliveries, setDeliveries] = useState({});
   const fileInput = useRef(null);
   const projectFormRef = useRef(null);
 
@@ -185,17 +174,13 @@ export default function MessagingView() {
       if (!quiet) setLoading(true);
       setError("");
       try {
-        const [settingsResponse, projectsResponse, runsResponse] =
+        const [settingsResponse, projectsResponse] =
           await Promise.all([
             apiFetch("/api/v1/cobros/reminders/settings", {
               token: authToken,
               onUnauthorized: logout,
             }),
             apiFetch("/api/v1/cobros/reminders/projects", {
-              token: authToken,
-              onUnauthorized: logout,
-            }),
-            apiFetch("/api/v1/cobros/reminders/runs", {
               token: authToken,
               onUnauthorized: logout,
             }),
@@ -214,14 +199,9 @@ export default function MessagingView() {
               "No se pudieron cargar las configuraciones.",
             ),
           );
-        if (!runsResponse.ok)
-          throw new Error(
-            await backendError(runsResponse, "No se pudo cargar el historial."),
-          );
-        const [settingsData, projectsData, runsData] = await Promise.all([
+        const [settingsData, projectsData] = await Promise.all([
           settingsResponse.json(),
           projectsResponse.json(),
-          runsResponse.json(),
         ]);
         setSettings(settingsData);
         setPromptEditors((current) => ({
@@ -242,7 +222,6 @@ export default function MessagingView() {
               },
         }));
         setProjects(listFrom(projectsData));
-        setRuns(listFrom(runsData));
       } catch (requestError) {
         if (requestError.message !== "Unauthorized")
           setError(requestError.message);
@@ -256,18 +235,6 @@ export default function MessagingView() {
   useEffect(() => {
     load();
   }, [load]);
-  useEffect(() => {
-    if (
-      !runs.some(
-        (run) =>
-          String(valueOf(run, ["status", "estado"], "")).toLowerCase() ===
-          "running",
-      )
-    )
-      return undefined;
-    const interval = window.setInterval(() => load(true), 5000);
-    return () => window.clearInterval(interval);
-  }, [runs, load]);
 
   const savePrompt = async (event, promptType) => {
     event.preventDefault();
@@ -404,35 +371,6 @@ export default function MessagingView() {
     setEditingProject(null);
     setForm(initialForm);
     if (fileInput.current) fileInput.current.value = "";
-  };
-
-  const toggleRun = async (run) => {
-    const runId = String(valueOf(run, ["id", "run_id"], ""));
-    if (expandedRuns.has(runId)) {
-      setExpandedRuns((current) => {
-        const next = new Set(current);
-        next.delete(runId);
-        return next;
-      });
-      return;
-    }
-    setExpandedRuns((current) => new Set(current).add(runId));
-    if (deliveries[runId]) return;
-    try {
-      const response = await apiFetch(
-        `/api/v1/cobros/reminders/runs/${runId}/deliveries?limit=200&offset=0`,
-        { token: authToken, onUnauthorized: logout },
-      );
-      if (!response.ok)
-        throw new Error(
-          await backendError(response, "No se pudieron cargar las entregas."),
-        );
-      const data = await response.json();
-      setDeliveries((current) => ({ ...current, [runId]: listFrom(data) }));
-    } catch (requestError) {
-      if (requestError.message !== "Unauthorized")
-        setError(requestError.message);
-    }
   };
 
   return (
@@ -806,196 +744,6 @@ export default function MessagingView() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-          <div>
-            <h3 className="font-semibold text-[#053E68]">
-              Historial de ejecuciones
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Consulta el resultado de cada proceso y sus entregas.
-            </p>
-          </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {runs.length} registros
-          </span>
-        </div>
-        <div className="overflow-x-auto px-5 pb-3">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
-                {[
-                  "",
-                  "Fecha consultada",
-                  "Vencimiento",
-                  "Candidatos",
-                  "Aceptados",
-                  "Fallidos",
-                  "Estado",
-                  "Error general",
-                ].map((header) => (
-                  <th key={header} className="px-3 py-3 font-semibold">
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => {
-                const runId = String(valueOf(run, ["id", "run_id"], ""));
-                const status = valueOf(run, ["status"], "—");
-                return (
-                  <Fragment key={runId}>
-                    <tr className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-3 py-3">
-                        <button
-                          type="button"
-                          aria-label="Ver entregas"
-                          onClick={() => toggleRun(run)}
-                          className="!p-1.5 text-[#0B5A8E] hover:bg-blue-50"
-                        >
-                          {expandedRuns.has(runId) ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </button>
-                      </td>
-                      <td className="px-3 py-3 text-slate-600">
-                        {valueOf(run, ["queried_at", "created_at", "started_at", "run_date"])}
-                      </td>
-                      <td className="px-3 py-3 text-slate-600">
-                        {valueOf(run, ["target_due_date"])}
-                      </td>
-                      <td className="px-3 py-3">
-                        {valueOf(run, ["candidates"], 0)}
-                      </td>
-                      <td className="px-3 py-3 text-emerald-700">
-                        {valueOf(run, ["accepted"], 0)}
-                      </td>
-                      <td className="px-3 py-3 text-red-600">
-                        {valueOf(run, ["failed"], 0)}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                          {status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-slate-500">
-                        {valueOf(run, ["error_message", "error"])}
-                      </td>
-                    </tr>
-                    {expandedRuns.has(runId) && (
-                      <tr>
-                        <td colSpan="8" className="bg-slate-50 p-4">
-                          <div className="rounded-xl border border-slate-200 bg-white p-3">
-                            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                              Entregas de esta ejecución
-                            </p>
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="text-left text-slate-500">
-                                  {[
-                                    "Cliente",
-                                    "Teléfono",
-                                    "Empresa + proyecto",
-                                    "Instancia",
-                                    "Total",
-                                    "Lotes",
-                                    "Estado",
-                                    "Mensaje",
-                                    "Error",
-                                  ].map((header) => (
-                                    <th
-                                      key={header}
-                                      className="p-2 font-semibold"
-                                    >
-                                      {header}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(deliveries[runId] || []).map(
-                                  (delivery, index) => (
-                                    <tr
-                                      key={delivery.id || index}
-                                      className="border-t border-slate-100"
-                                    >
-                                      <td className="p-2">
-                                        {valueOf(delivery, [
-                                          "nombre_cliente",
-                                          "client_name",
-                                          "cliente",
-                                        ])}
-                                      </td>
-                                      <td className="p-2">
-                                        {valueOf(delivery, [
-                                          "phone",
-                                          "telefono",
-                                        ])}
-                                      </td>
-                                      <td className="p-2">
-                                        {valueOf(delivery, ["empresa", "company_name"])} /{" "}
-                                        {valueOf(delivery, ["proyecto", "project_name"])}
-                                      </td>
-                                      <td className="p-2">
-                                        {valueOf(delivery, [
-                                          "evolution_instance",
-                                        ])}
-                                      </td>
-                                      <td className="p-2">
-                                        {money.format(
-                                          Number(
-                                            valueOf(delivery, ["total_pendiente", "total"], 0),
-                                          ) || 0,
-                                        )}
-                                      </td>
-                                      <td className="p-2">
-                                        {formatMessagingLots(delivery.lotes ?? delivery.lots)}
-                                      </td>
-                                      <td className="p-2">
-                                        {valueOf(delivery, ["status"])}
-                                      </td>
-                                      <td className="p-2">
-                                        {valueOf(delivery, [
-                                          "message",
-                                          "generated_message",
-                                        ])}
-                                      </td>
-                                      <td className="p-2">
-                                        {valueOf(delivery, ["error_message", "error"])}
-                                      </td>
-                                    </tr>
-                                  ),
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-              {!loading && runs.length === 0 && (
-                <tr>
-                  <td
-                    colSpan="8"
-                    className="px-3 py-10 text-center text-slate-500"
-                  >
-                    Aún no hay ejecuciones registradas.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="px-6 pb-5 text-xs text-slate-500">
-          “Aceptado” indica que Evolution aceptó el envío; no confirma que el
-          cliente lo haya leído.
-        </p>
-      </section>
       {selectedImageUrl && (
         <SavedImageModal
           key={selectedImageUrl}

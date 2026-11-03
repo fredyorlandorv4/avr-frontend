@@ -1,5 +1,6 @@
 import { ArrowLeft, RefreshCw, Users } from 'lucide-react';
 import { TableSkeleton } from './Skeleton.jsx';
+import { hasCallAnalysis } from '../utils/callAnalysis.js';
 
 export default function CampaignContactsView({ campaign, contacts, calls, loading, onBack, onRefresh, onViewCallAnalysis }) {
   if (!campaign) return null;
@@ -154,7 +155,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                       </div>
                     </div>
                     <div className="mt-4">
-                      {contact.call_id ? (
+                      {contact.call_id && hasCallAnalysis(calls.find(c => c.id === contact.call_id)?.analysis) ? (
                         <button
                           onClick={() => {
                             const call = calls.find(c => c.id === contact.call_id);
@@ -166,7 +167,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                         </button>
                       ) : (
                         <div className="w-full px-3 py-2 text-sm bg-gray-50 text-gray-400 rounded-lg text-center">
-                          Sin llamada
+                          {contact.call_id ? 'Sin análisis' : 'Sin llamada'}
                         </div>
                       )}
                     </div>
@@ -204,7 +205,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                           {contact.call_id ? `#${contact.call_id}` : '-'}
                         </td>
                         <td className="py-3 px-4">
-                          {contact.call_id ? (
+                          {contact.call_id && hasCallAnalysis(calls.find(c => c.id === contact.call_id)?.analysis) ? (
                             <button
                               onClick={() => {
                                 const call = calls.find(c => c.id === contact.call_id);
@@ -215,7 +216,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                               Ver llamada
                             </button>
                           ) : (
-                            <span className="text-gray-400 text-sm">Sin llamada</span>
+                            <span className="text-gray-400 text-sm">{contact.call_id ? 'Sin análisis' : 'Sin llamada'}</span>
                           )}
                         </td>
                       </tr>
