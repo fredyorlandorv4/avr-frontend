@@ -39,7 +39,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
 
   const visibleItems = NAV_ITEMS.filter(({ id }) => {
     if (ADMIN_ONLY.has(id) && !isAdmin) return false;
-    if (id === 'messaging' && !(isAdmin || (role === 'supervisor' && sapSources.includes('lotes')))) return false;
+    if (id === 'messaging' && !(isAdmin || (role === 'supervisor' && sapSources.length > 0))) return false;
     if (id === 'overdue-portfolio' && !isAdmin && !sapSources.length) return false;
     if (isTelemarketing && TELEMARKETING_HIDDEN.has(id)) return false;
     return true;

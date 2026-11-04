@@ -19,6 +19,7 @@ import {
 } from "../utils/overdueInstallments.js";
 import { portfolioClientId } from "../utils/accessScopes.js";
 import { portfolioCurrency, formatPortfolioMoney } from "../utils/portfolioMoney.js";
+import { portfolioMessageSelection as messageSelectionFor } from "../utils/portfolioMessaging.js";
 
 const value = (source, keys, fallback = "") => {
   for (const key of keys) {
@@ -34,6 +35,7 @@ const searchable = (value) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+const buildingCompanyKey = (name) => searchable(name).trim().replace(/\s+/g, " ");
 
 const guatemalaToday = () => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -62,7 +64,7 @@ const daysUntilPayment = (dueDate) => {
   return Math.round((dueAt - guatemalaToday()) / 86_400_000);
 };
 
-const normalizeClients = (payload) => {
+const normalizeClients = (payload, buildingProjects = new Map()) => {
   const clients = Array.isArray(payload)
     ? payload
     : payload?.clientes ||
@@ -82,11 +84,15 @@ const normalizeClients = (payload) => {
             id: String(
               value(lot, ["id", "lote_id", "lote", "codigo_lote"], lotIndex),
             ),
-            project: value(
+            sapProject: value(
               lot,
               ["proyecto", "nombre_proyecto", "project"],
               "Proyecto sin nombre",
             ),
+            project: client.tipo_cartera === "edificios"
+              ? buildingProjects.get(buildingCompanyKey(value(lot, ["proyecto", "nombre_proyecto", "project"])))
+                || value(lot, ["proyecto", "nombre_proyecto", "project"], "Proyecto sin nombre")
+              : value(lot, ["proyecto", "nombre_proyecto", "project"], "Proyecto sin nombre"),
             lot: value(
               lot,
               ["lote", "nombre_lote", "codigo_lote"],
@@ -139,15 +145,6 @@ function messageFor(response, detail) {
   return detail || `No se pudo cargar la cartera vencida (${response.status}).`;
 }
 
-function messageSelectionFor(client, lot) {
-  if (!client.company || !lot.project || (!client.code && !client.name)) return null;
-  return {
-    company_name: client.company,
-    project_name: lot.project,
-    ...(client.code ? { customer_code: client.code } : { customer_name: client.name }),
-  };
-}
-
 function messageSelectionKey(selection) {
   return JSON.stringify([
     selection.company_name,
@@ -168,8 +165,8 @@ function messageTargetsFor(clients, selectedClientIds, projectFilter) {
         .forEach((lot) => {
           const selection = messageSelectionFor(client, lot);
           if (!selection) return;
-          const key = messageSelectionKey(selection);
-          const target = targetsByKey.get(key) || { selection, dueDates: new Set() };
+          const key = `${client.source}:${messageSelectionKey(selection)}`;
+          const target = targetsByKey.get(key) || { selection, source: client.source, dueDates: new Set() };
           lot.installments.forEach((installment) => {
             (installment.dueDates || [installment.dueDate]).forEach((date) => {
               if (daysUntilPayment(date) !== null) target.dueDates.add(date);
@@ -211,6 +208,7 @@ export default function OverduePortfolioView() {
   const [portfolioFilter, setPortfolioFilter] = useState('todo');
   const selectAllRef = useRef(null);
   const loadSequence = useRef(0);
+  const canViewBuildings = sapSources.includes("edificios");
 
   const load = useCallback(async (idsToPreserve = null) => {
     if (!authToken) return;
@@ -239,7 +237,32 @@ export default function OverduePortfolioView() {
       }
       const payload = await response.json();
       if (sequence !== loadSequence.current) return;
-      const refreshedClients = normalizeClients(payload);
+      const buildingProjects = new Map();
+      if (canViewBuildings) {
+        try {
+          const projectsResponse = await apiFetch("/api/v1/cobros/reminders/projects", {
+            token: authToken,
+            onUnauthorized: logout,
+          });
+          if (projectsResponse.ok) {
+            const configs = await projectsResponse.json();
+            const byCompany = new Map();
+            configs.filter((config) => config.active).forEach((config) => {
+              const key = buildingCompanyKey(config.company_name);
+              const matches = byCompany.get(key) || [];
+              matches.push(config.project_name);
+              byCompany.set(key, matches);
+            });
+            byCompany.forEach((projects, key) => {
+              if (projects.length === 1) buildingProjects.set(key, projects[0]);
+            });
+          }
+        } catch {
+          // La cartera SAP sigue visible si la configuración no está disponible.
+        }
+      }
+      if (sequence !== loadSequence.current) return;
+      const refreshedClients = normalizeClients(payload, buildingProjects);
       const availableClientIds = new Set(refreshedClients.map((client) => client.id));
       const retainedClientIds = new Set(
         [...previousSelectedIds].filter((id) => availableClientIds.has(id)),
@@ -258,7 +281,7 @@ export default function OverduePortfolioView() {
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [authToken, logout, portfolioFilter]);
+  }, [authToken, logout, portfolioFilter, canViewBuildings]);
 
   useEffect(() => {
     load();
@@ -511,80 +534,78 @@ export default function OverduePortfolioView() {
   const prepareMessageSend = async (sourceClients = clients, sourceIds = selectedClientIds) => {
     const selected = sourceClients.filter((client) => sourceIds.has(client.id));
     if (!selected.length) return;
-    if (selected.some(client => client.source === 'edificios')) {
-      setMessageError('El envío de mensajes desde esta pantalla está disponible para Lotes. Selecciona registros de Lotes para continuar.');
-      return;
-    }
     setMessageError("");
     setMessageSuccess("");
     setPreparingMessages(true);
     try {
       const targets = messageTargetsFor(sourceClients, sourceIds, projectFilter);
       if (!targets.length) throw new Error("Los clientes seleccionados no tienen empresa, proyecto o identificación suficientes para preparar mensajes.");
-      const collections = [];
-      const remindersByDate = new Map();
       let skipped = 0;
-      targets.forEach(({ selection, dueDates }) => {
-        const dates = [...dueDates].map((date) => ({ date, days: daysUntilPayment(date) }));
-        if (dates.some(({ days }) => days < 0)) {
-          collections.push(selection);
-          return;
-        }
-        const next = dates.filter(({ days }) => days >= 0 && days <= 3)
-          .sort((a, b) => a.days - b.days)[0];
-        if (!next) {
-          skipped += 1;
-          return;
-        }
-        const pending = remindersByDate.get(next.date) || [];
-        pending.push(selection);
-        remindersByDate.set(next.date, pending);
-      });
       const groups = [];
-      const candidateLists = await Promise.all([...remindersByDate].map(async ([dueDate, selections]) => {
-        const response = await apiFetch(`/api/v1/cobros/reminders/candidates?due_date=${encodeURIComponent(dueDate)}`, {
-          token: authToken,
-          onUnauthorized: logout,
-        });
-        const payload = await response.json().catch(() => []);
-        if (!response.ok) throw new Error("No se pudieron verificar los recordatorios en SAP.");
-        const candidates = Array.isArray(payload) ? payload : [];
-        const deliveryKeys = [];
-        selections.forEach((selection) => {
-          const sameCustomer = (item) =>
-            searchable(item.company_name) === searchable(selection.company_name) &&
-            (selection.customer_code
-              ? searchable(item.customer_code) === searchable(selection.customer_code)
-              : searchable(item.customer_name) === searchable(selection.customer_name));
-          if (collections.some(sameCustomer)) return;
-          const candidate = candidates.find((item) =>
-            String(item.due_date).slice(0, 10) === dueDate &&
-            sameCustomer(item) &&
-            searchable(item.project_name) === searchable(selection.project_name) &&
-            item.delivery_key
-          );
-          if (candidate) {
-            deliveryKeys.push(candidate.delivery_key);
+      for (const source of ["lotes", "edificios"]) {
+        const collections = [];
+        const remindersByDate = new Map();
+        targets.filter((target) => target.source === source).forEach(({ selection, dueDates }) => {
+          const dates = [...dueDates].map((date) => ({ date, days: daysUntilPayment(date) }));
+          if (dates.some(({ days }) => days < 0)) {
+            collections.push(selection);
             return;
           }
-          const overdue = candidates.filter((item) => sameCustomer(item) && daysUntilPayment(item.due_date) < 0);
-          if (!overdue.length) {
+          const next = dates.filter(({ days }) => days >= 0 && days <= 3)
+            .sort((a, b) => a.days - b.days)[0];
+          if (!next) {
             skipped += 1;
             return;
           }
-          overdue.forEach((item) => collections.push({
-            company_name: item.company_name,
-            project_name: item.project_name,
-            ...(item.customer_code ? { customer_code: item.customer_code } : { customer_name: item.customer_name }),
-          }));
+          const pending = remindersByDate.get(next.date) || [];
+          pending.push(selection);
+          remindersByDate.set(next.date, pending);
         });
-        return { dueDate, deliveryKeys: [...new Set(deliveryKeys)] };
-      }));
-      const uniqueCollections = [...new Map(collections.map((item) => [messageSelectionKey(item), item])).values()];
-      if (uniqueCollections.length) groups.push({ type: "Cobro", body: { collection_selections: uniqueCollections }, count: uniqueCollections.length });
-      candidateLists.forEach(({ dueDate, deliveryKeys }) => {
-        if (deliveryKeys.length) groups.push({ type: "Recordatorio", body: { due_date: dueDate, delivery_keys: deliveryKeys }, count: deliveryKeys.length });
-      });
+        const candidateLists = await Promise.all([...remindersByDate].map(async ([dueDate, selections]) => {
+          const response = await apiFetch(`/api/v1/cobros/reminders/candidates?${new URLSearchParams({ due_date: dueDate, tipo_cartera: source })}`, {
+            token: authToken,
+            onUnauthorized: logout,
+          });
+          const payload = await response.json().catch(() => []);
+          if (!response.ok) throw new Error("No se pudieron verificar los recordatorios en SAP.");
+          const candidates = Array.isArray(payload) ? payload : [];
+          const deliveryKeys = [];
+          selections.forEach((selection) => {
+            const sameCustomer = (item) =>
+              searchable(item.company_name) === searchable(selection.company_name) &&
+              (selection.customer_code
+                ? searchable(item.customer_code) === searchable(selection.customer_code)
+                : searchable(item.customer_name) === searchable(selection.customer_name));
+            if (collections.some(sameCustomer)) return;
+            const candidate = candidates.find((item) =>
+              String(item.due_date).slice(0, 10) === dueDate &&
+              sameCustomer(item) &&
+              searchable(item.project_name) === searchable(selection.project_name) &&
+              item.delivery_key
+            );
+            if (candidate) {
+              deliveryKeys.push(candidate.delivery_key);
+              return;
+            }
+            const overdue = candidates.filter((item) => sameCustomer(item) && daysUntilPayment(item.due_date) < 0);
+            if (!overdue.length) {
+              skipped += 1;
+              return;
+            }
+            overdue.forEach((item) => collections.push({
+              company_name: item.company_name,
+              project_name: item.project_name,
+              ...(item.customer_code ? { customer_code: item.customer_code } : { customer_name: item.customer_name }),
+            }));
+          });
+          return { dueDate, deliveryKeys: [...new Set(deliveryKeys)] };
+        }));
+        const uniqueCollections = [...new Map(collections.map((item) => [messageSelectionKey(item), item])).values()];
+        if (uniqueCollections.length) groups.push({ type: "Cobro", body: { tipo_cartera: source, collection_selections: uniqueCollections }, count: uniqueCollections.length });
+        candidateLists.forEach(({ dueDate, deliveryKeys }) => {
+          if (deliveryKeys.length) groups.push({ type: "Recordatorio", body: { tipo_cartera: source, due_date: dueDate, delivery_keys: deliveryKeys }, count: deliveryKeys.length });
+        });
+      }
       if (!groups.length) throw new Error("Ninguno de los clientes seleccionados tiene cuotas vencidas ni recordatorios disponibles para los próximos 3 días.");
       setMessageSelection({ groups, skipped });
     } catch (prepareError) {
@@ -1129,7 +1150,7 @@ export default function OverduePortfolioView() {
                 selecciones listas para encolar. Si hay cuotas vencidas y próximas del mismo cliente y empresa, se incluirán en un mismo mensaje.
               </p>
               {messageSelection.groups.map((group, index) => (
-                <p key={`${group.type}-${index}`}>{group.count} de {group.type.toLowerCase()}{group.count === 1 ? "" : "s"}{group.body.due_date ? ` (vencen ${group.body.due_date})` : ""}</p>
+                <p key={`${group.type}-${index}`}>{group.count} de {group.type.toLowerCase()}{group.count === 1 ? "" : "s"} · {group.body.tipo_cartera === "edificios" ? "Edificios" : "Lotes"}{group.body.due_date ? ` (vencen ${group.body.due_date})` : ""}</p>
               ))}
               {messageSelection.skipped > 0 && (
                 <p className="rounded-lg bg-amber-50 p-3 text-amber-800">

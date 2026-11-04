@@ -270,7 +270,7 @@ function AppShell({ darkMode, onToggleDarkMode }) {
   // Restricciones del área de marketing (telemarketing): no crea campañas
   // por Excel ni accede a proyectos. Sí accede a follow-ups.
   const isTelemarketing = (areaName || '').toLowerCase() === 'telemarketing';
-  const canViewMessaging = isAdmin || (role === 'supervisor' && sapSources.includes('lotes'));
+  const canViewMessaging = isAdmin || (role === 'supervisor' && sapSources.length > 0);
   const canCreateCampaigns = !isTelemarketing;
   const navigate = useNavigate();
   const { pathname } = useLocation();

@@ -269,19 +269,25 @@ function DynamicField({ field, value, onChange, disabled, error }) {
   );
 }
 
-const threeDaysFromNow = () => {
-  const date = new Date();
-  date.setDate(date.getDate() + 3);
-  return date.toISOString().slice(0, 10);
+const guatemalaDate = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Guatemala", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date()).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
 };
+const shiftDate = (date, days) => {
+  const result = new Date(`${date}T00:00:00Z`);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result.toISOString().slice(0, 10);
+};
+const emptyTestInstallment = () => ({ lot: "", due_date: shiftDate(guatemalaDate(), -1), amount: "" });
 const emptyCarmenForm = () => ({
   company_name: "",
   project_name: "",
   customer_name: "",
   phone: "",
-  due_date: threeDaysFromNow(),
-  total_pending: "",
-  lots: [""],
+  currency: "GTQ",
+  installments: [emptyTestInstallment()],
   message_type: "collection",
 });
 const isValidTestPhone = (phone) => {
@@ -364,23 +370,40 @@ function CarmenTestModal({ onClose }) {
     if (
       !form.company_name ||
       !form.project_name ||
-      !form.customer_name.trim() ||
-      !form.total_pending ||
-      !form.lots.some((lot) => lot.trim())
+      !form.customer_name.trim()
     )
-      return "Completa todos los campos obligatorios y al menos un lote.";
+      return "Completa empresa, proyecto y nombre del cliente.";
     if (!isValidTestPhone(form.phone))
       return "Ingresa un teléfono de Guatemala de 8 dígitos o uno internacional de 10 a 15 dígitos.";
-    if (Number(form.total_pending) <= 0)
-      return "El total pendiente debe ser mayor que cero.";
+    if (form.installments.some((item) => !item.lot.trim() || !item.due_date || !Number.isFinite(Number(item.amount)) || Number(item.amount) <= 0))
+      return "Completa el lote o unidad, la fecha y el saldo positivo de cada cuota.";
+    if (new Set(form.installments.map((item) => item.lot.trim())).size > 20 || form.installments.length > 100)
+      return "La prueba permite hasta 20 lotes o unidades y 100 cuotas.";
+    const today = guatemalaDate();
+    const latest = shiftDate(today, 3);
+    const overdue = form.installments.filter((item) => item.due_date < today);
+    const upcoming = form.installments.filter((item) => item.due_date >= today);
+    if (form.message_type === "collection" && !overdue.length)
+      return "Para un cobro agrega al menos una cuota vencida antes de hoy.";
+    if (form.message_type === "reminder" && (overdue.length || new Set(upcoming.map((item) => item.due_date)).size !== 1))
+      return "Para un recordatorio usa cuotas no vencidas con la misma fecha.";
+    if (upcoming.some((item) => item.due_date > latest))
+      return "Los recordatorios incluyen cuotas que vencen entre hoy y los próximos 3 días.";
     return "";
   };
-  const payload = () => ({
-    ...form,
-    customer_name: form.customer_name.trim(),
-    total_pending: Number(form.total_pending),
-    lots: form.lots.map((lot) => lot.trim()).filter(Boolean),
-  });
+  const payload = () => {
+    const today = guatemalaDate();
+    const installments = form.installments.map((item) => ({ lot: item.lot.trim(), due_date: item.due_date, amount: Number(item.amount) }));
+    const relevant = form.message_type === "collection" ? installments.filter((item) => item.due_date < today) : installments;
+    return {
+      company_name: form.company_name, project_name: form.project_name,
+      customer_name: form.customer_name.trim(), phone: form.phone,
+      message_type: form.message_type, currency: form.currency, installments,
+      due_date: relevant.map((item) => item.due_date).sort()[0],
+      total_pending: relevant.reduce((total, item) => total + Math.round(item.amount * 100), 0) / 100,
+      lots: [...new Set(installments.map((item) => item.lot))],
+    };
+  };
 
   const generate = async () => {
     const validationError = formError();
@@ -436,6 +459,7 @@ function CarmenTestModal({ onClose }) {
         body: {
           company_name: form.company_name,
           project_name: form.project_name,
+          currency: form.currency,
           phone: form.phone,
           message: preview.message,
         },
@@ -611,71 +635,44 @@ function CarmenTestModal({ onClose }) {
                 />
               </label>
               <label className="text-sm font-medium text-slate-700">
-                Fecha de vencimiento
-                <input
-                  disabled={busy}
-                  type="date"
-                  value={form.due_date}
-                  onChange={(event) => update("due_date", event.target.value)}
-                  className={inputCls}
-                />
-              </label>
-              <label className="text-sm font-medium text-slate-700">
-                Total pendiente
-                <input
-                  disabled={busy}
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={form.total_pending}
-                  onChange={(event) =>
-                    update("total_pending", event.target.value)
-                  }
-                  className={inputCls}
-                />
+                Cartera y moneda
+                <select disabled={busy} value={form.currency} onChange={(event) => update("currency", event.target.value)} className={inputCls}>
+                  <option value="GTQ">Lotes (quetzales)</option>
+                  <option value="USD">Edificios (dólares)</option>
+                </select>
               </label>
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-700">Lotes</p>
+                <p className="text-sm font-semibold text-slate-700">Cuotas de prueba</p>
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => update("lots", [...form.lots, ""])}
+                  onClick={() => update("installments", [...form.installments, emptyTestInstallment()])}
                   className="inline-flex items-center gap-1 text-sm font-medium text-[#053E68]"
                 >
                   <Plus className="h-4 w-4" />
-                  Agregar lote
+                  Agregar cuota
                 </button>
               </div>
-              {form.lots.map((lot, index) => (
-                <div key={index} className="mb-2 flex gap-2">
-                  <input
-                    disabled={busy}
-                    value={lot}
-                    onChange={(event) =>
-                      update(
-                        "lots",
-                        form.lots.map((item, itemIndex) =>
-                          itemIndex === index ? event.target.value : item,
-                        ),
-                      )
-                    }
-                    placeholder={`Lote ${index + 1}`}
-                    className={inputCls}
-                  />
-                  {form.lots.length > 1 && (
+              <p className="mb-3 text-xs text-slate-500">Ingresa cada cuota con su fecha y saldo; para un cobro puedes agregar cuotas próximas y probar el mensaje combinado.</p>
+              {form.installments.map((installment, index) => (
+                <div key={index} className="mb-3 flex flex-wrap items-end gap-2">
+                  <label className="min-w-36 flex-1 text-xs text-slate-600">{form.currency === "USD" ? "Unidad" : "Lote"}
+                    <input disabled={busy} value={installment.lot} onChange={(event) => update("installments", form.installments.map((item, i) => i === index ? { ...item, lot: event.target.value } : item))} placeholder={`${form.currency === "USD" ? "Unidad" : "Lote"} ${index + 1}`} className={inputCls} />
+                  </label>
+                  <label className="min-w-36 flex-1 text-xs text-slate-600">Vencimiento
+                    <input disabled={busy} type="date" value={installment.due_date} onChange={(event) => update("installments", form.installments.map((item, i) => i === index ? { ...item, due_date: event.target.value } : item))} className={inputCls} />
+                  </label>
+                  <label className="min-w-32 flex-1 text-xs text-slate-600">Saldo ({form.currency === "USD" ? "$" : "Q"})
+                    <input disabled={busy} type="number" min="0.01" step="0.01" value={installment.amount} onChange={(event) => update("installments", form.installments.map((item, i) => i === index ? { ...item, amount: event.target.value } : item))} className={inputCls} />
+                  </label>
+                  {form.installments.length > 1 && (
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() =>
-                        update(
-                          "lots",
-                          form.lots.filter(
-                            (_, itemIndex) => itemIndex !== index,
-                          ),
-                        )
-                      }
+                      aria-label={`Eliminar cuota ${index + 1}`}
+                      onClick={() => update("installments", form.installments.filter((_, i) => i !== index))}
                       className="!p-2 text-red-500"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -739,7 +736,7 @@ function CarmenTestModal({ onClose }) {
                       </span>
                       <span>Teléfono: {preview.normalized_phone || "—"}</span>
                       <span>
-                        Total: {preview.total_pending ?? form.total_pending}
+                        Total: {form.currency === "USD" ? "$" : "Q"}{preview.total_pending ?? "—"}
                       </span>
                       <span>Modelo: {preview.model || "—"}</span>
                       <span>Palabras: {preview.word_count ?? "—"}</span>
