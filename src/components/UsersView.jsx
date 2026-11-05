@@ -6,6 +6,7 @@ import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 import { TableSkeleton } from './Skeleton.jsx';
 import UserScopeEditor from './UserScopeEditor.jsx';
+import { sapSourcesForScopes } from '../utils/accessScopes.js';
 
 const ROLES = [
   { value: 'agente',     label: 'Agente' },
@@ -87,6 +88,9 @@ export default function UsersView() {
     const name = areas.find(a => a.id === scope.area_id)?.area || u.area_name || `#${scope.area_id}`;
     return scope.subarea_ids == null ? name : `${name}: ${scope.subarea_ids.map(id => allSubareas.find(s => s.id === id)?.name || `#${id}`).join(', ')}`;
   }).join(' · ');
+
+  const sourceLabelsOf = (scopes, isAdmin = false) => sapSourcesForScopes(scopes, areas, allSubareas, isAdmin)
+    .map(source => source === 'lotes' ? 'Lotes' : 'Edificios');
 
   // El rol "admin" solo existe en el área "system". El resto: supervisor o agente.
   const selectedAreaIsSystem = (() => {
@@ -239,6 +243,7 @@ export default function UsersView() {
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Rol</th>
                   <th className="px-4 py-3">Área</th>
+                  <th className="px-4 py-3">Carteras SAP</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -254,6 +259,16 @@ export default function UsersView() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{areaNameOf(u)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {sourceLabelsOf(u.access_scopes ?? [{ area_id: u.area_id, subarea_ids: null }], u.role === 'admin').map(label => (
+                          <span key={label} className="rounded-full bg-[#053E68]/10 px-2 py-0.5 text-xs font-medium text-[#053E68]">{label}</span>
+                        ))}
+                        {!sourceLabelsOf(u.access_scopes ?? [{ area_id: u.area_id, subarea_ids: null }], u.role === 'admin').length && (
+                          <span className="text-xs text-gray-400">Sin acceso SAP</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
@@ -341,7 +356,12 @@ export default function UsersView() {
 
               {/* Área: solo el usuario "system" puede elegir/cambiar. El resto la hereda. */}
               {isSystem && (
-                <UserScopeEditor areas={areas} subareas={allSubareas} value={form.access_scopes} disabled={saving} onChange={scopes => setForm(current => ({ ...current, access_scopes: scopes, area_id: scopes[0]?.area_id != null ? String(scopes[0].area_id) : '', role: areas.find(a => a.id === scopes[0]?.area_id)?.area?.toLowerCase() !== 'system' && current.role === 'admin' ? 'agente' : current.role }))} />
+                <>
+                  <UserScopeEditor areas={areas} subareas={allSubareas} value={form.access_scopes} disabled={saving} onChange={scopes => setForm(current => ({ ...current, access_scopes: scopes, area_id: scopes[0]?.area_id != null ? String(scopes[0].area_id) : '', role: areas.find(a => a.id === scopes[0]?.area_id)?.area?.toLowerCase() !== 'system' && current.role === 'admin' ? 'agente' : current.role }))} />
+                  <p className="text-sm text-gray-600">
+                    Carteras SAP de este usuario: {sourceLabelsOf(form.access_scopes, form.role === 'admin').join(' y ') || 'ninguna'}.
+                  </p>
+                </>
               )}
 
             </div>

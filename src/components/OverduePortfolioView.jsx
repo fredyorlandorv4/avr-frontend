@@ -783,7 +783,7 @@ export default function OverduePortfolioView() {
       ) : (
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+            <table className="w-full min-w-[960px] text-sm text-left">
               <thead className="bg-[#053E68] text-white">
                 <tr>
                   <th className="px-4 py-3 font-semibold whitespace-nowrap">
@@ -803,6 +803,7 @@ export default function OverduePortfolioView() {
                   </th>
                   {[
                     "Cliente",
+                    "Lote / Unidad",
                     "Teléfono principal",
                     "Cuotas atrasadas",
                     "Total pendiente",
@@ -810,7 +811,7 @@ export default function OverduePortfolioView() {
                   ].map((header, index) => (
                     <th
                       key={`${header}-${index}`}
-                      className="px-4 py-3 font-semibold whitespace-nowrap"
+                      className={`px-4 py-3 font-semibold whitespace-nowrap ${index === 1 ? "border-l border-white/20" : ""}`}
                     >
                       {header}
                     </th>
@@ -849,6 +850,22 @@ export default function OverduePortfolioView() {
                               .join(" · ") || "Sin empresa o código registrado"}
                           </p>
                         </td>
+                        <td className="min-w-40 border-l border-gray-100 text-gray-700">
+                          {client.lots.length ? (
+                            <div className="divide-y divide-gray-200">
+                              {client.lots.map((lot, index) => (
+                                <div
+                                  key={JSON.stringify([lot.project, lot.id, index])}
+                                  className="px-4 py-3 font-medium"
+                                >
+                                  {lot.lot || "Sin lote o unidad"}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="block px-4 py-4 text-gray-400">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-4 text-gray-700 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5">
                             <Phone className="w-4 h-4 text-gray-400" />
@@ -879,7 +896,7 @@ export default function OverduePortfolioView() {
                       </tr>
                       {clientExpanded && (
                         <tr key={`${client.id}-lots`}>
-                          <td colSpan="6" className="p-4 bg-gray-50">
+                          <td colSpan="7" className="p-4 bg-gray-50">
                             <div className="space-y-3">
                               {client.lots.map((lot) => {
                                 const lotId = JSON.stringify([client.id, lot.project, lot.id]);
@@ -1001,7 +1018,7 @@ export default function OverduePortfolioView() {
                 {visibleClients.length === 0 && (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan="7"
                       className="px-4 py-12 text-center text-gray-500"
                     >
                       No hay clientes que coincidan con los filtros.
