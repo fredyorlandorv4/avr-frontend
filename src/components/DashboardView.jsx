@@ -9,6 +9,7 @@ import { useArea } from '../context/AreaContext.jsx';
 import { apiFetch } from '../api.js';
 import AreaFilter from './AreaFilter.jsx';
 import { DashboardSkeleton } from './Skeleton.jsx';
+import MessagingDashboardView from './MessagingDashboardView.jsx';
 
 // ─── Colores ──────────────────────────────────────────────────
 const C = {
@@ -216,7 +217,7 @@ function AgentTable({ agents }) {
 // ─── Dashboard principal ──────────────────────────────────────
 const inputCls = 'px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-700 bg-white outline-none focus:border-[#053E68] transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50';
 
-export default function DashboardView() {
+function CallsDashboardView() {
   const { authToken, logout } = useAuth();
   // El alcance (área / subárea / sin categorizar) lo maneja AreaFilter vía AreaContext.
   const { scope } = useArea();
@@ -622,4 +623,16 @@ export default function DashboardView() {
 
     </div>
   );
+}
+
+export default function DashboardView() {
+  const { role, isAdmin, sapSources } = useAuth();
+  const [view, setView] = useState('calls');
+  const canViewMessages = (isAdmin || role === 'supervisor') && sapSources.length > 0;
+  return <div className="space-y-5">
+    {canViewMessages && <div className="mx-auto flex max-w-[1280px] gap-1 rounded-xl border border-gray-200 bg-white p-1 w-fit" role="group" aria-label="Seleccionar tablero">
+      {[['calls', 'Llamadas'], ['messages', 'Mensajes']].map(([value, label]) => <button key={value} type="button" aria-pressed={view === value} onClick={() => setView(value)} className={`rounded-lg px-5 py-2 text-sm font-semibold ${view === value ? 'bg-[#053E68] text-white' : 'text-gray-600 hover:bg-gray-100'}`}>{label}</button>)}
+    </div>}
+    {view === 'messages' && canViewMessages ? <MessagingDashboardView /> : <CallsDashboardView />}
+  </div>;
 }

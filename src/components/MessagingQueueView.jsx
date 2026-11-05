@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { messagingType, matchesMessagingType } from "../utils/messagingType.js";
 import { MESSAGING_PAGE_SIZE, messagingDateRange, messagingPage } from "../utils/messagingPagination.js";
 import MessagingDateFilter from "./MessagingDateFilter.jsx";
+import { messageLots, messageStatus, messageTypeLabel, filterAndSortMessages } from "../utils/messagingTable.js";
 
 const todayInGuatemala = () => {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -28,29 +29,8 @@ const listFrom = (value) =>
   Array.isArray(value) ? value : value?.items || value?.results || value?.data || [];
 const runDateOf = (run) =>
   String(run.run_date || run.queried_at || run.created_at || "").slice(0, 10);
-const lotsOf = (delivery) =>
-  (Array.isArray(delivery.lotes) ? delivery.lotes : [])
-    .map((lot) => (typeof lot === "string" ? lot : lot?.lote))
-    .filter(Boolean)
-    .join(", ") || "—";
-
-function statusOf(delivery) {
-  const status = String(delivery.status || "").toLowerCase();
-  if (status === "accepted" || status === "sent" || status === "completed")
-    return { label: "Enviado", className: "bg-emerald-100 text-emerald-800" };
-  if (
-    status === "sending" ||
-    status === "processing" ||
-    status === "in_progress" ||
-    (status === "pending" && Number(delivery.attempts) > 0)
-  )
-    return { label: "Enviando", className: "bg-blue-100 text-blue-800" };
-  if (status === "pending" || status === "scheduled" || status === "queued" || status === "enqueued")
-    return { label: "En cola", className: "bg-amber-100 text-amber-800" };
-  if (status === "failed")
-    return { label: "Fallido", className: "bg-red-100 text-red-800" };
-  return { label: status || "—", className: "bg-slate-100 text-slate-700" };
-}
+const lotsOf = delivery => messageLots(delivery) || "—";
+const statusOf = messageStatus;
 
 function Pagination({ page, total, onChange }) {
   const pages = Math.max(1, Math.ceil(total / MESSAGING_PAGE_SIZE));
@@ -177,7 +157,7 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
 }
 
 export default function MessagingQueueView() {
-  const { authToken, logout } = useAuth();
+  const { authToken, logout, sapSources } = useAuth();
   const [runs, setRuns] = useState([]);
   const [deliveries, setDeliveries] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -185,6 +165,11 @@ export default function MessagingQueueView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [sort, setSort] = useState({ key: "", direction: "" });
   const [dateStart, setDateStart] = useState(todayInGuatemala);
   const [dateEnd, setDateEnd] = useState("");
   const [messagePage, setMessagePage] = useState(1);
@@ -294,14 +279,27 @@ export default function MessagingQueueView() {
         : null)
     : null;
   const closeDetail = useCallback(() => setSelected(null), []);
-  const visibleDeliveries = useMemo(() => {
-    const dates = new Map(runs.map((run) => [String(run.id), runDateOf(run)]));
+  const enrichedDeliveries = useMemo(() => {
+    const runsById = new Map(runs.map((run) => [String(run.id), run]));
+    const projectsById = new Map(projects.map(project => [String(project.id), project]));
     return deliveries.map((delivery) => ({
       ...delivery,
-      runDate: dates.get(String(delivery.run_id)) || "",
-      displayType: messagingType(delivery, dates.get(String(delivery.run_id))),
-    })).filter((delivery) => matchesMessagingType(delivery.displayType, typeFilter));
-  }, [deliveries, runs, typeFilter]);
+      runDate: runDateOf(runsById.get(String(delivery.run_id)) || {}),
+      tipo_cartera: runsById.get(String(delivery.run_id))?.tipo_cartera || "lotes",
+      displayProject: runsById.get(String(delivery.run_id))?.tipo_cartera === 'edificios' ? projectsById.get(String(delivery.project_config_id))?.project_name || delivery.proyecto : delivery.proyecto,
+      displayType: messagingType(delivery, runDateOf(runsById.get(String(delivery.run_id)) || {})),
+    }));
+  }, [deliveries, runs, projects]);
+  const visibleDeliveries = useMemo(() => {
+    const items = enrichedDeliveries.filter((delivery) => matchesMessagingType(delivery.displayType, typeFilter));
+    return filterAndSortMessages(items, { search, status: statusFilter, project: projectFilter, source: sourceFilter, sortKey: sort.key, sortDirection: sort.direction });
+  }, [enrichedDeliveries, typeFilter, search, statusFilter, projectFilter, sourceFilter, sort]);
+  const projectOptions = useMemo(() => [...new Set(enrichedDeliveries.map(item => item.displayProject).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')), [enrichedDeliveries]);
+  const statusOptions = useMemo(() => [...new Map(deliveries.map(item => { const status = statusOf(item); return [status.key, status]; })).values()], [deliveries]);
+  const changeSort = key => {
+    setSort(current => current.key !== key ? { key, direction: 'desc' } : current.direction === 'desc' ? { key, direction: 'asc' } : { key: '', direction: '' });
+    setMessagePage(1);
+  };
   const { current: messagePageNumber, items: pageDeliveries } = messagingPage(visibleDeliveries, messagePage);
 
   return (
@@ -366,6 +364,12 @@ export default function MessagingQueueView() {
             </span>
           </div>
         </div>
+        <div className="grid gap-3 border-b border-slate-100 px-6 py-4 sm:grid-cols-2 lg:grid-cols-4">
+          <input aria-label="Buscar por lote, cliente o código" placeholder="Buscar lote, cliente o código" value={search} onChange={event => { setSearch(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700" />
+          <select aria-label="Filtrar por estado" value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"><option value="">Todos los estados</option>{statusOptions.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select>
+          <select aria-label="Filtrar por proyecto" value={projectFilter} onChange={event => { setProjectFilter(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"><option value="">Todos los proyectos</option>{projectOptions.map(project => <option key={project} value={project}>{project}</option>)}</select>
+          <select aria-label="Filtrar por cartera" value={sourceFilter} onChange={event => { setSourceFilter(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"><option value="">Todas las carteras</option>{sapSources.includes('lotes') && <option value="lotes">Lotes</option>}{sapSources.includes('edificios') && <option value="edificios">Edificios</option>}</select>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] table-fixed text-left text-sm">
             <colgroup>
@@ -379,10 +383,10 @@ export default function MessagingQueueView() {
             </colgroup>
             <thead className="bg-[#053E68] text-white">
               <tr>
-                {["Fecha", "Cliente", "Proyecto", "Lote", "Tipo", "Mensaje", "Status"].map(
-                  (header) => (
-                    <th key={header} className="px-4 py-3 font-semibold">
-                      {header}
+                {[["Fecha", "date"], ["Cliente", "client"], ["Proyecto", "project"], ["Lote", "lot"], ["Tipo", "type"], ["Mensaje", "message"], ["Status", "status"]].map(
+                  ([header, key]) => (
+                    <th key={key} aria-sort={sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className="px-4 py-3 font-semibold">
+                      <button type="button" onClick={() => changeSort(key)} className="text-left">{header}{sort.key === key ? (sort.direction === 'desc' ? ' ↓' : ' ↑') : ''}</button>
                     </th>
                   ),
                 )}
@@ -414,9 +418,9 @@ export default function MessagingQueueView() {
                       </td>
                       <td
                         className="truncate px-4 py-3 text-slate-700"
-                        title={delivery.proyecto}
+                        title={delivery.displayProject}
                       >
-                        {delivery.proyecto || "—"}
+                        {delivery.displayProject || "—"}
                       </td>
                       <td
                         className="truncate px-4 py-3 text-slate-700"
@@ -425,7 +429,7 @@ export default function MessagingQueueView() {
                         {lotsOf(delivery)}
                       </td>
                       <td className="px-4 py-3 text-slate-700">
-                        {{ collection: "Cobro", reminder: "Recordatorio", combined: "Cobro y recordatorio", unknown: "Sin identificar" }[delivery.displayType]}
+                        {messageTypeLabel(delivery.displayType)}
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -459,8 +463,8 @@ export default function MessagingQueueView() {
                     colSpan="7"
                     className="px-4 py-12 text-center text-slate-500"
                   >
-                    {deliveries.length && typeFilter !== "all"
-                      ? "No hay mensajes de este tipo."
+                    {deliveries.length && (typeFilter !== "all" || search || statusFilter || projectFilter || sourceFilter)
+                      ? "No hay mensajes que coincidan con los filtros."
                       : runs.length
                       ? "No hay mensajes registrados para estas ejecuciones."
                       : "No hay mensajes para el período seleccionado."}
