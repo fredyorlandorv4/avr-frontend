@@ -24,7 +24,9 @@ export function groupOverdueInstallments(installments) {
   const groups = new Map();
 
   installments.forEach((installment, index) => {
-    const dueDate = field(installment, ['fecha_compromiso', 'fecha_vencimiento', 'fecha_pago']);
+    const rawDate = field(installment, ['fecha_compromiso', 'fecha_vencimiento', 'fecha_pago']);
+    const dueDate = /^\d{4}-\d{2}-\d{2}(?:$|[T ])/.test(String(rawDate))
+      ? String(rawDate).slice(0, 10) : rawDate;
     const date = validDate(dueDate);
     const key = date ? `${date.year}-${String(date.month).padStart(2, '0')}` : `sin-fecha-${index}`;
     const balance = Number(field(installment, ['total_a_pagar', 'saldo', 'monto_pendiente'], 0)) || 0;
@@ -58,6 +60,16 @@ export function groupOverdueInstallments(installments) {
       number: index + 1,
       total: group.totalCents / 100,
     }));
+}
+
+export function matchesPaymentStatus(installments, status, daysUntilPayment) {
+  if (status === 'all') return true;
+  return installments.some((installment) =>
+    (installment.dueDates || [installment.dueDate]).some((date) => {
+      const days = daysUntilPayment(date);
+      return days !== null && (status === 'upcoming' ? days >= 0 && days <= 3 : days < 0);
+    }),
+  );
 }
 
 export function campaignDebtColumns(lot) {

@@ -16,6 +16,7 @@ import { useArea } from "../context/AreaContext.jsx";
 import {
   campaignDebtColumns,
   groupOverdueInstallments,
+  matchesPaymentStatus,
 } from "../utils/overdueInstallments.js";
 import { portfolioClientId } from "../utils/accessScopes.js";
 import { portfolioCurrency, formatPortfolioMoney } from "../utils/portfolioMoney.js";
@@ -313,17 +314,13 @@ export default function OverduePortfolioView() {
       const matchesProject =
         !projectFilter ||
         client.lots.some((lot) => lot.project === projectFilter);
-      const matchesPaymentStatus =
+      const matchesStatus =
         paymentFilter === "all" ||
         client.lots.some((lot) =>
-          lot.installments.some((installment) => {
-            const days = daysUntilPayment(installment.dueDate);
-            return paymentFilter === "upcoming"
-              ? days !== null && days >= 0 && days <= 3
-              : days !== null && days < 0;
-          }),
+          (!projectFilter || lot.project === projectFilter) &&
+          matchesPaymentStatus(lot.installments, paymentFilter, daysUntilPayment),
         );
-      return matchesText && matchesProject && matchesPaymentStatus;
+      return matchesText && matchesProject && matchesStatus;
     });
   }, [clients, clientQuery, projectFilter, paymentFilter]);
   const allVisibleSelected =

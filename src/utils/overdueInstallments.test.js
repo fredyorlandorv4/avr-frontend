@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { campaignDebtColumns, groupOverdueInstallments } from './overdueInstallments.js';
+import { campaignDebtColumns, groupOverdueInstallments, matchesPaymentStatus } from './overdueInstallments.js';
 
 test('combina saldos del mismo mes y numera las cuotas desde uno', () => {
   const rows = [
@@ -37,6 +37,18 @@ test('usa fecha_compromiso para distinguir cuotas vencidas y futuras del mismo m
   ]);
   assert.equal(groups[0].dueDate, '2026-10-28');
   assert.deepEqual(groups[0].dueDates, ['2026-10-28', '2026-10-31']);
+});
+
+test('detecta cuotas por vencer y vencidas aunque estén agrupadas en el mismo mes', () => {
+  const groups = groupOverdueInstallments([
+    { fecha_compromiso: '2026-11-03', saldo: 100 },
+    { fecha_compromiso: '2026-11-07T00:00:00', saldo: 200 },
+  ]);
+  const daysUntilPayment = (date) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse('2026-11-05T00:00:00Z')) / 86400000);
+  assert.deepEqual(groups[0].dueDates, ['2026-11-03', '2026-11-07']);
+  assert.equal(matchesPaymentStatus(groups, 'upcoming', daysUntilPayment), true);
+  assert.equal(matchesPaymentStatus(groups, 'overdue', daysUntilPayment), true);
+  assert.equal(matchesPaymentStatus(groups, 'upcoming', () => 4), false);
 });
 
 test('genera las columnas requeridas por la campaña de cobros desde Consulta SAP', () => {
