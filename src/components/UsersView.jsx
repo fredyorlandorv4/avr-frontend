@@ -19,6 +19,8 @@ const EMPTY_FORM = {
   full_name: '', username: '', email: '', password: '',
   role: 'agente', area_id: '', is_active: true,
   access_scopes: [],
+  sap_selection: null,
+  sap_selection_dirty: false,
 };
 
 const inputCls =
@@ -66,6 +68,7 @@ export default function UsersView() {
 
   const openEdit = (u) => {
     setEditing(u);
+    const scopes = u.access_scopes ?? [{ area_id: u.area_id, subarea_ids: null }];
     setForm({
       full_name: u.full_name || '',
       username:  u.username,
@@ -74,7 +77,13 @@ export default function UsersView() {
       role:      u.role,
       area_id:   u.area_id != null ? String(u.area_id) : '',
       is_active: u.is_active,
-      access_scopes: u.access_scopes ?? [{ area_id: u.area_id, subarea_ids: null }],
+      access_scopes: scopes,
+      sap_selection: scopes.some(scope => scope.sap_sources != null)
+        ? ['lotes', 'edificios'].filter(source => scopes.some(scope => scope.sap_sources != null
+          ? scope.sap_sources.includes(source)
+          : sapSourcesForScopes([scope], areas, allSubareas).includes(source)))
+        : null,
+      sap_selection_dirty: false,
     });
     setFormError('');
     setModalOpen(true);
@@ -91,6 +100,13 @@ export default function UsersView() {
 
   const sourceLabelsOf = (scopes, isAdmin = false) => sapSourcesForScopes(scopes, areas, allSubareas, isAdmin)
     .map(source => source === 'lotes' ? 'Lotes' : 'Edificios');
+
+  const availableSapSources = sapSourcesForScopes(
+    form.access_scopes.map(scope => ({ ...scope, sap_sources: null })), areas, allSubareas,
+  );
+  const selectedSapSources = !form.sap_selection_dirty
+    ? sapSourcesForScopes(form.access_scopes, areas, allSubareas)
+    : availableSapSources.filter(source => form.sap_selection.includes(source));
 
   // El rol "admin" solo existe en el área "system". El resto: supervisor o agente.
   const selectedAreaIsSystem = (() => {
@@ -119,6 +135,7 @@ export default function UsersView() {
     setSaving(true);
     try {
       let res;
+      const savedScopes = form.sap_selection_dirty ? form.access_scopes.map(scope => ({ ...scope, sap_sources: form.sap_selection })) : form.access_scopes;
       if (!editing) {
         const body = {
           email:     form.email.trim(),
@@ -127,7 +144,7 @@ export default function UsersView() {
           full_name: form.full_name.trim() || null,
           role:      form.role,
         };
-        if (isSystem) { body.area_id = form.access_scopes[0].area_id; body.access_scopes = form.access_scopes; }
+        if (isSystem) { body.area_id = savedScopes[0].area_id; body.access_scopes = savedScopes; }
         res = await apiFetch('/api/v1/auth/users', { method: 'POST', token: authToken, onUnauthorized: logout, body });
       } else {
         const body = {
@@ -135,12 +152,22 @@ export default function UsersView() {
           full_name: form.full_name.trim() || null,
           role:      form.role,
         };
-        if (isSystem) { body.area_id = form.access_scopes[0].area_id; body.access_scopes = form.access_scopes; }
+        if (isSystem) { body.area_id = savedScopes[0].area_id; body.access_scopes = savedScopes; }
         if (form.password) body.password = form.password;
         res = await apiFetch(`/api/v1/auth/users/${editing.id}`, { method: 'PATCH', token: authToken, onUnauthorized: logout, body });
       }
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        if (isSystem && savedScopes.some(scope => scope.sap_sources != null) && (!Array.isArray(data.access_scopes) || savedScopes.some(scope => {
+          if (scope.sap_sources == null) return false;
+          const saved = data.access_scopes.find(item => item.area_id === scope.area_id);
+          return !Array.isArray(saved?.sap_sources) || saved.sap_sources.length !== scope.sap_sources.length || !scope.sap_sources.every(source => saved.sap_sources.includes(source));
+        }))) {
+          if (!editing) setEditing(data);
+          setFormError('El servidor no guardó la selección de carteras. Actualiza el backend antes de conceder acceso; revisa este usuario, que puede conservar sus permisos anteriores.');
+          await loadUsers();
+          return;
+        }
         setModalOpen(false); setEditing(null);
         await loadUsers();
       } else {
@@ -357,10 +384,21 @@ export default function UsersView() {
               {/* Área: solo el usuario "system" puede elegir/cambiar. El resto la hereda. */}
               {isSystem && (
                 <>
-                  <UserScopeEditor areas={areas} subareas={allSubareas} value={form.access_scopes} disabled={saving} onChange={scopes => setForm(current => ({ ...current, access_scopes: scopes, area_id: scopes[0]?.area_id != null ? String(scopes[0].area_id) : '', role: areas.find(a => a.id === scopes[0]?.area_id)?.area?.toLowerCase() !== 'system' && current.role === 'admin' ? 'agente' : current.role }))} />
-                  <p className="text-sm text-gray-600">
-                    Carteras SAP de este usuario: {sourceLabelsOf(form.access_scopes, form.role === 'admin').join(' y ') || 'ninguna'}.
-                  </p>
+                  <UserScopeEditor areas={areas} subareas={allSubareas} value={form.access_scopes} disabled={saving} onChange={scopes => setForm(current => ({ ...current, access_scopes: scopes.map(scope => current.sap_selection != null && !current.access_scopes.some(existing => existing.area_id === scope.area_id) ? { ...scope, sap_sources: current.sap_selection } : scope), area_id: scopes[0]?.area_id != null ? String(scopes[0].area_id) : '', role: areas.find(a => a.id === scopes[0]?.area_id)?.area?.toLowerCase() !== 'system' && current.role === 'admin' ? 'agente' : current.role }))} />
+                  <fieldset className="sm:col-span-2 rounded-lg border border-gray-200 p-3">
+                    <legend className="px-1 text-sm font-medium text-gray-700">Carteras SAP de este usuario</legend>
+                    {form.role === 'admin' ? <p className="text-sm text-gray-600">Los administradores tienen acceso a Lotes y Edificios.</p> : <>
+                      <div className="flex flex-wrap gap-4">
+                        {[['lotes', 'Lotes'], ['edificios', 'Edificios']].map(([source, label]) => (
+                          <label key={source} className="inline-flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={selectedSapSources.includes(source)} disabled={saving || !availableSapSources.includes(source)} onChange={event => setForm(current => ({ ...current, sap_selection: event.target.checked ? [...selectedSapSources, source] : selectedSapSources.filter(item => item !== source), sap_selection_dirty: true }))} />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500">Las opciones disponibles dependen de las áreas y subáreas asignadas. Desmarca ambas para quitar el acceso a SAP.</p>
+                    </>}
+                  </fieldset>
                 </>
               )}
 

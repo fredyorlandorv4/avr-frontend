@@ -36,4 +36,7 @@ test('las carteras visibles siguen las áreas y subáreas asignadas', () => {
   assert.deepEqual(sapSourcesForScopes([{ area_id: 7, subarea_ids: [14, 15] }], areas, configured), ['lotes', 'edificios']);
   assert.deepEqual(sapSourcesForScopes([{ area_id: 7, subarea_ids: null }], areas, configured), ['lotes', 'edificios']);
   assert.deepEqual(sapSourcesForScopes([], areas, configured), []);
+  assert.deepEqual(sapSourcesForScopes([{ area_id: 7, subarea_ids: null, sap_sources: ['lotes'] }], areas, configured), ['lotes']);
+  assert.deepEqual(sapSourcesForScopes([{ area_id: 7, subarea_ids: null, sap_sources: [] }], areas, configured), []);
+  assert.deepEqual(sapSourcesForScopes([{ area_id: 7, subarea_ids: [14], sap_sources: ['edificios'] }], areas, configured), []);
 });

@@ -811,7 +811,7 @@ export default function OverduePortfolioView() {
                   ].map((header, index) => (
                     <th
                       key={`${header}-${index}`}
-                      className={`px-4 py-3 font-semibold whitespace-nowrap ${index === 1 ? "border-l border-white/20" : ""}`}
+                      className="border-l border-white/20 px-4 py-3 font-semibold whitespace-nowrap"
                     >
                       {header}
                     </th>
@@ -839,7 +839,7 @@ export default function OverduePortfolioView() {
                             className="h-4 w-4 accent-[#053E68]"
                           />
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="border-l border-gray-100 px-4 py-4">
                           <p className="font-semibold text-[#053E68]">
                             {client.name}
                           </p>
@@ -866,19 +866,19 @@ export default function OverduePortfolioView() {
                             <span className="block px-4 py-4 text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 text-gray-700 whitespace-nowrap">
+                        <td className="border-l border-gray-100 px-4 py-4 text-gray-700 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5">
                             <Phone className="w-4 h-4 text-gray-400" />
                             {client.phone}
                           </span>
                         </td>
-                        <td className="px-4 py-4 font-medium text-center">
+                        <td className="border-l border-gray-100 px-4 py-4 font-medium text-center">
                           {client.overdueInstallments}
                         </td>
-                        <td className="px-4 py-4 font-semibold text-[#053E68] whitespace-nowrap">
+                        <td className="border-l border-gray-100 px-4 py-4 font-semibold text-[#053E68] whitespace-nowrap">
                           {formatPortfolioMoney(client.pendingTotal, client.currency)}
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="border-l border-gray-100 px-4 py-4">
                           <button
                             onClick={() =>
                               toggle(setExpandedClients, client.id)

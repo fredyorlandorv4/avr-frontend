@@ -2,7 +2,7 @@ export default function UserScopeEditor({ areas, subareas, value, onChange, disa
   const sourceNames = item => (item.sap_sources || []).map(source => source === 'lotes' ? 'Lotes' : 'Edificios').join(' y ');
   return <fieldset className="sm:col-span-2 space-y-3">
     <legend className="mb-2 text-sm font-medium text-gray-700">Áreas y subáreas autorizadas</legend>
-    <p className="text-xs text-gray-500">Para dar acceso solo a Lotes o solo a Edificios, asigna la subárea correspondiente. El área completa incluye sus dos carteras si están configuradas.</p>
+    <p className="text-xs text-gray-500">Selecciona las áreas y subáreas del usuario. Sus carteras SAP se eligen por separado.</p>
     {areas.map(area => {
       const scope = value.find(item => item.area_id === area.id);
       const children = subareas.filter(item => item.area_id === area.id || (item.area_id == null && item.area === area.area));

@@ -188,7 +188,6 @@ export default function MessagingQueueView() {
   const [dateStart, setDateStart] = useState(todayInGuatemala);
   const [dateEnd, setDateEnd] = useState("");
   const [messagePage, setMessagePage] = useState(1);
-  const [runPage, setRunPage] = useState(1);
   const requestInFlight = useRef(false);
   const requestSequence = useRef(0);
   const { from, to, invalid: invalidRange } = messagingDateRange(dateStart, dateEnd, todayInGuatemala());
@@ -304,7 +303,6 @@ export default function MessagingQueueView() {
     })).filter((delivery) => matchesMessagingType(delivery.displayType, typeFilter));
   }, [deliveries, runs, typeFilter]);
   const { current: messagePageNumber, items: pageDeliveries } = messagingPage(visibleDeliveries, messagePage);
-  const { current: runPageNumber, items: pageRuns } = messagingPage(runs, runPage);
 
   return (
     <div className="mx-auto max-w-[1440px] space-y-5 pb-8">
@@ -316,7 +314,7 @@ export default function MessagingQueueView() {
           <div>
             <h2 className="text-xl font-semibold">Mensajería</h2>
             <p className="mt-1 text-sm text-blue-100">
-              Mensajes y ejecuciones del período seleccionado
+              Mensajes del período seleccionado
             </p>
           </div>
         </div>
@@ -341,7 +339,7 @@ export default function MessagingQueueView() {
       )}
       <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <span className="text-sm font-medium text-slate-700">Fecha de ejecución</span>
-        <MessagingDateFilter from={from} to={to} today={todayInGuatemala()} onApply={(start, end) => { setDateStart(start); setDateEnd(end); setMessagePage(1); setRunPage(1); }} />
+        <MessagingDateFilter from={from} to={to} today={todayInGuatemala()} onApply={(start, end) => { setDateStart(start); setDateEnd(end); setMessagePage(1); }} />
         <p className="text-sm text-slate-500">Selecciona un día o un rango para consultar el historial.</p>
       </div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -473,30 +471,6 @@ export default function MessagingQueueView() {
           </table>
         </div>
         {!invalidRange && !loading && <Pagination page={messagePageNumber} total={visibleDeliveries.length} onChange={setMessagePage} />}
-      </section>
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h3 className="font-semibold text-[#053E68]">Ejecuciones del período</h3>
-          <p className="mt-1 text-sm text-slate-500">Aceptado indica que Evolution aceptó el envío; no confirma la entrega ni la lectura.</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-[#053E68] text-white"><tr>{["Fecha", "Vencimiento", "Candidatos", "Aceptados", "Fallidos", "Estado", "Error"].map((header) => <th key={header} className="px-4 py-3 font-semibold">{header}</th>)}</tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {invalidRange || loading ? <tr><td colSpan="7" className="px-4 py-8 text-center text-slate-500">{invalidRange ? "Selecciona un rango válido." : "Cargando ejecuciones…"}</td></tr>
-                : pageRuns.length ? pageRuns.map((run) => <tr key={run.id}>
-                  <td className="px-4 py-3">{runDateOf(run) || "—"}</td>
-                  <td className="px-4 py-3">{run.target_due_date || "—"}</td>
-                  <td className="px-4 py-3">{run.candidates ?? 0}</td>
-                  <td className="px-4 py-3">{run.accepted ?? 0}</td>
-                  <td className="px-4 py-3">{run.failed ?? 0}</td>
-                  <td className="px-4 py-3">{run.status || "—"}</td>
-                  <td className="px-4 py-3 text-red-700">{run.error_message || "—"}</td>
-                </tr>) : <tr><td colSpan="7" className="px-4 py-8 text-center text-slate-500">No hay ejecuciones para el período seleccionado.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        {!invalidRange && !loading && <Pagination page={runPageNumber} total={runs.length} onChange={setRunPage} />}
       </section>
       {selected && (
         <MessageDetail

@@ -20,15 +20,19 @@ export function sapSourcesForScopes(scopes, areas, subareas, isAdmin = false) {
   if (isAdmin) return ['lotes', 'edificios'];
   const sources = new Set();
   for (const scope of scopes || []) {
+    const scopeSources = new Set();
     if (scope.subarea_ids == null) {
       const area = areas.find(item => item.id === scope.area_id);
-      for (const source of area?.sap_sources || []) sources.add(source);
+      for (const source of area?.sap_sources || []) scopeSources.add(source);
     }
     for (const subarea of subareas) {
       if (subarea.area_id === scope.area_id &&
           (scope.subarea_ids == null || scope.subarea_ids.includes(subarea.id))) {
-        for (const source of subarea.sap_sources || []) sources.add(source);
+        for (const source of subarea.sap_sources || []) scopeSources.add(source);
       }
+    }
+    for (const source of scopeSources) {
+      if (scope.sap_sources == null || scope.sap_sources.includes(source)) sources.add(source);
     }
   }
   return ['lotes', 'edificios'].filter(source => sources.has(source));
