@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MessageSquare, RefreshCw, X } from "lucide-react";
+import { Link2, MessageSquare, RefreshCw, X } from "lucide-react";
 import { apiFetch } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { messagingType, matchesMessagingType } from "../utils/messagingType.js";
 import { MESSAGING_PAGE_SIZE, messagingDateRange, messagingPage } from "../utils/messagingPagination.js";
 import MessagingDateFilter from "./MessagingDateFilter.jsx";
-import { messageLots, messageStatus, messageTypeLabel, filterAndSortMessages } from "../utils/messagingTable.js";
+import { messageLots, messageStatus, messageTypeLabel, filterAndSortMessages, messageDate, messageCountry, messageSender } from "../utils/messagingTable.js";
 
 const todayInGuatemala = () => {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -31,6 +31,44 @@ const runDateOf = (run) =>
   String(run.run_date || run.queried_at || run.created_at || "").slice(0, 10);
 const lotsOf = delivery => messageLots(delivery) || "—";
 const statusOf = messageStatus;
+const canCancel = delivery => delivery.status === 'pending' || (delivery.status === 'sending' && Number(delivery.attempts) === 0);
+const displayDate = (delivery) => {
+  const value = messageDate(delivery);
+  if (!value) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("es-GT", { timeZone: "America/Guatemala" });
+};
+
+function DeliveryProgress({ delivery, onCancel, cancelling }) {
+  const status = statusOf(delivery).key;
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    if (status !== 'sending') return undefined;
+    const interval = window.setInterval(() => setProgress(value => Math.min(95, value + 1 + Math.ceil(Math.random() * 3))), 650);
+    return () => window.clearInterval(interval);
+  }, [status]);
+  const percent = status === 'sent' || status === 'failed' || status === 'cancelled' ? 100 : status === 'queued' ? 0 : progress;
+  const color = status === 'sent' ? 'bg-emerald-500' : status === 'failed' ? 'bg-red-500' : status === 'cancelled' ? 'bg-slate-400' : status === 'sending' ? 'animate-pulse bg-gradient-to-r from-blue-600 via-sky-400 to-blue-600' : 'bg-blue-500';
+  return <div className="flex min-w-36 items-center gap-2">
+    <div className="h-4 flex-1 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Progreso del envío" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+      <div className={`h-full rounded-full transition-[width] duration-500 ${color}`} style={{ width: `${percent}%` }} />
+    </div>
+    <span className="w-9 text-right text-xs tabular-nums text-slate-600">{percent}%</span>
+    {canCancel(delivery) && <button type="button" onClick={() => onCancel(delivery)} disabled={cancelling} aria-label={`Cancelar envío a ${delivery.nombre_cliente}`} title="Cancelar envío" className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-40"><X className="h-4 w-4" /></button>}
+  </div>;
+}
+
+function InstanceLinkModal({ instances, selected, qr, message, busy, onSelect, onClose }) {
+  return createPortal(<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <div role="dialog" aria-modal="true" aria-label="Vinculación de instancias" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="flex items-center justify-between"><h2 className="text-xl font-bold text-[#053E68]">Vinculación</h2><button type="button" onClick={onClose} aria-label="Cerrar vinculación"><X className="h-5 w-5" /></button></div>
+      <p className="mt-2 text-sm text-slate-600">Selecciona una instancia y escanea el QR desde WhatsApp.</p>
+      <div className="mt-4 max-h-40 space-y-2 overflow-y-auto">{instances.length ? instances.map(name => <button key={name} type="button" onClick={() => onSelect(name)} className={`block w-full rounded-lg border px-3 py-2 text-left text-sm ${selected === name ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>{name}</button>) : <p className="text-sm text-slate-500">No hay instancias disponibles para esta cartera.</p>}</div>
+      {selected && <div className="mt-5 flex min-h-64 flex-col items-center justify-center rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">{qr ? <img src={qr} alt={`QR para vincular ${selected}`} className="h-60 w-60 object-contain" /> : busy ? 'Cargando QR…' : message || 'Esperando QR de Evolution API…'}</div>}
+    </div>
+  </div>, document.body);
+}
 
 function Pagination({ page, total, onChange }) {
   const pages = Math.max(1, Math.ceil(total / MESSAGING_PAGE_SIZE));
@@ -173,6 +211,14 @@ export default function MessagingQueueView() {
   const [dateStart, setDateStart] = useState(todayInGuatemala);
   const [dateEnd, setDateEnd] = useState("");
   const [messagePage, setMessagePage] = useState(1);
+  const [cancelling, setCancelling] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [instances, setInstances] = useState([]);
+  const [selectedInstance, setSelectedInstance] = useState('');
+  const [qr, setQr] = useState('');
+  const [qrMessage, setQrMessage] = useState('');
+  const [qrBusy, setQrBusy] = useState(false);
   const requestInFlight = useRef(false);
   const requestSequence = useRef(0);
   const { from, to, invalid: invalidRange } = messagingDateRange(dateStart, dateEnd, todayInGuatemala());
@@ -302,6 +348,73 @@ export default function MessagingQueueView() {
   };
   const { current: messagePageNumber, items: pageDeliveries } = messagingPage(visibleDeliveries, messagePage);
 
+  const responseError = async response => {
+    const payload = await response.json().catch(() => ({}));
+    return typeof payload.detail === 'string' ? payload.detail : payload.detail?.message || `Error HTTP ${response.status}`;
+  };
+  const cancelDelivery = async delivery => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      const response = await apiFetch(`/api/v1/cobros/reminders/runs/${delivery.run_id}/deliveries/${delivery.id}/cancel`, { method: 'POST', token: authToken, onUnauthorized: logout });
+      if (!response.ok) throw new Error(await responseError(response));
+      setNotice('Envío cancelado. La cola continuará con el siguiente mensaje.');
+      await load(true);
+    } catch (requestError) {
+      if (requestError.message !== 'Unauthorized') setNotice(requestError.message);
+      await load(true);
+    } finally { setCancelling(false); }
+  };
+  const cancelFiltered = async () => {
+    if (cancelling) return;
+    const ids = visibleDeliveries.filter(canCancel).map(item => item.id);
+    if (!ids.length) return;
+    setCancelling(true);
+    try {
+      let cancelled = 0;
+      for (let offset = 0; offset < ids.length; offset += 10000) {
+        const response = await apiFetch('/api/v1/cobros/reminders/deliveries/cancel', { method: 'POST', body: ids.slice(offset, offset + 10000), token: authToken, onUnauthorized: logout });
+        if (!response.ok) throw new Error(await responseError(response));
+        cancelled += (await response.json()).cancelled || 0;
+      }
+      setNotice(`${cancelled} mensaje${cancelled === 1 ? '' : 's'} cancelado${cancelled === 1 ? '' : 's'}.`);
+      await load(true);
+    } catch (requestError) { if (requestError.message !== 'Unauthorized') setNotice(requestError.message); }
+    finally { setCancelling(false); }
+  };
+  const openLinking = async () => {
+    setLinkOpen(true);
+    setInstances([]);
+    setSelectedInstance('');
+    setQr('');
+    try {
+      const response = await apiFetch('/api/v1/cobros/reminders/instances', { token: authToken, onUnauthorized: logout });
+      if (!response.ok) throw new Error(await responseError(response));
+      setInstances(await response.json());
+    } catch (requestError) { if (requestError.message !== 'Unauthorized') setNotice(requestError.message); }
+  };
+  useEffect(() => {
+    if (!linkOpen || !selectedInstance) return undefined;
+    let active = true;
+    let inFlight = false;
+    const fetchQr = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await apiFetch(`/api/v1/cobros/reminders/instances/${encodeURIComponent(selectedInstance)}/connect`, { token: authToken, onUnauthorized: logout });
+        if (!response.ok) throw new Error(await responseError(response));
+        const payload = await response.json();
+        if (active) { setQr(payload.qr || ''); setQrMessage(payload.message || ''); }
+      } catch (requestError) {
+        if (active && requestError.message !== 'Unauthorized') { setQrMessage(requestError.message); setNotice(requestError.message); }
+      } finally { inFlight = false; if (active) setQrBusy(false); }
+    };
+    setQrBusy(true);
+    fetchQr();
+    const timer = window.setInterval(fetchQr, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [linkOpen, selectedInstance, authToken, logout]);
+
   return (
     <div className="mx-auto max-w-[1440px] space-y-5 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[#053E68] to-[#0B5A8E] px-6 py-5 text-white shadow-sm">
@@ -325,6 +438,7 @@ export default function MessagingQueueView() {
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Actualizar
         </button>
+        <button type="button" onClick={openLinking} className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-semibold hover:bg-white/20"><Link2 className="h-4 w-4" />Vinculación</button>
       </div>
 
       {error && (
@@ -335,6 +449,7 @@ export default function MessagingQueueView() {
           {error}
         </p>
       )}
+      {notice && <div role="status" className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Cerrar aviso"><X className="h-4 w-4" /></button></div>}
       <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <span className="text-sm font-medium text-slate-700">Fecha de ejecución</span>
         <MessagingDateFilter from={from} to={to} today={todayInGuatemala()} onApply={(start, end) => { setDateStart(start); setDateEnd(end); setMessagePage(1); }} />
@@ -351,6 +466,7 @@ export default function MessagingQueueView() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={cancelFiltered} disabled={cancelling || !visibleDeliveries.some(canCancel)} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40">Cancelar Envío</button>
             <label className="text-sm text-slate-600">
               Tipo de mensaje{" "}
               <select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
@@ -371,22 +487,13 @@ export default function MessagingQueueView() {
           <select aria-label="Filtrar por cartera" value={sourceFilter} onChange={event => { setSourceFilter(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"><option value="">Todas las carteras</option>{sapSources.includes('lotes') && <option value="lotes">Lotes</option>}{sapSources.includes('edificios') && <option value="edificios">Edificios</option>}</select>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] table-fixed text-left text-sm">
-            <colgroup>
-              <col className="w-[11%]" />
-              <col className="w-[16%]" />
-              <col className="w-[13%]" />
-              <col className="w-[13%]" />
-              <col className="w-[12%]" />
-              <col className="w-[24%]" />
-              <col className="w-[11%]" />
-            </colgroup>
+          <table className="w-full min-w-[2200px] text-left text-sm">
             <thead className="bg-[#053E68] text-white">
               <tr>
-                {[["Fecha", "date"], ["Cliente", "client"], ["Proyecto", "project"], ["Lote", "lot"], ["Tipo", "type"], ["Mensaje", "message"], ["Status", "status"]].map(
+                {[["Fecha y Hora", "date"], ["Código de Cliente", "code"], ["Cliente", "client"], ["Teléfono", "phone"], ["País", "country"], ["Proyecto", "project"], ["Manzana/Lote", "lot"], ["Usuario Envío", "sender"], ["Tipo", "type"], ["Mensaje", "message"], ["Estado", "status"], ["Progreso", "progress"], ["Error", "error"]].map(
                   ([header, key]) => (
-                    <th key={key} aria-sort={sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className="px-4 py-3 font-semibold">
-                      <button type="button" onClick={() => changeSort(key)} className="text-left">{header}{sort.key === key ? (sort.direction === 'desc' ? ' ↓' : ' ↑') : ''}</button>
+                    <th key={key} aria-sort={key === 'progress' ? undefined : sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className="px-4 py-3 font-semibold">
+                      {key === 'progress' ? header : <button type="button" onClick={() => changeSort(key)} className="text-left">{header}{sort.key === key ? (sort.direction === 'desc' ? ' ↓' : ' ↑') : ''}</button>}
                     </th>
                   ),
                 )}
@@ -394,11 +501,11 @@ export default function MessagingQueueView() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {invalidRange ? (
-                <tr><td colSpan="7" className="px-4 py-12 text-center text-slate-500">Selecciona un rango válido.</td></tr>
+                <tr><td colSpan="13" className="px-4 py-12 text-center text-slate-500">Selecciona un rango válido.</td></tr>
               ) : loading ? (
                 <tr>
                   <td
-                    colSpan="7"
+                    colSpan="13"
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     Cargando mensajes…
@@ -409,13 +516,16 @@ export default function MessagingQueueView() {
                   const status = statusOf(delivery);
                   return (
                     <tr key={delivery.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-700">{delivery.runDate || "—"}</td>
+                      <td className="px-4 py-3 text-slate-700">{displayDate(delivery)}</td>
+                      <td className="px-4 py-3 text-slate-700">{delivery.codigo_cliente || "—"}</td>
                       <td
                         className="truncate px-4 py-3 font-medium text-slate-800"
                         title={delivery.nombre_cliente}
                       >
                         {delivery.nombre_cliente || "—"}
                       </td>
+                      <td className="px-4 py-3 text-slate-700">{delivery.telefono || "—"}</td>
+                      <td className="px-4 py-3 text-slate-700">{messageCountry(delivery) || "—"}</td>
                       <td
                         className="truncate px-4 py-3 text-slate-700"
                         title={delivery.displayProject}
@@ -428,6 +538,7 @@ export default function MessagingQueueView() {
                       >
                         {lotsOf(delivery)}
                       </td>
+                      <td className="px-4 py-3 text-slate-700">{messageSender(delivery) || "—"}</td>
                       <td className="px-4 py-3 text-slate-700">
                         {messageTypeLabel(delivery.displayType)}
                       </td>
@@ -454,13 +565,15 @@ export default function MessagingQueueView() {
                           {status.label}
                         </span>
                       </td>
+                      <td className="px-4 py-3"><DeliveryProgress delivery={delivery} onCancel={cancelDelivery} cancelling={cancelling} /></td>
+                      <td className="min-w-48 whitespace-pre-wrap break-words px-4 py-3 text-red-700">{delivery.error_message || ""}</td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
                   <td
-                    colSpan="7"
+                    colSpan="13"
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     {deliveries.length && (typeFilter !== "all" || search || statusFilter || projectFilter || sourceFilter)
@@ -484,6 +597,7 @@ export default function MessagingQueueView() {
           onClose={closeDetail}
         />
       )}
+      {linkOpen && <InstanceLinkModal instances={instances} selected={selectedInstance} qr={qr} message={qrMessage} busy={qrBusy} onSelect={name => { setSelectedInstance(name); setQr(''); setQrMessage(''); }} onClose={() => setLinkOpen(false)} />}
     </div>
   );
 }

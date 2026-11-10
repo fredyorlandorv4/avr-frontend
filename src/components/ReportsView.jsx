@@ -183,6 +183,7 @@ export default function ReportsView() {
   const [clientInput, setClientInput] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [commitmentOnly, setCommitmentOnly] = useState(false);
 
   // La consulta se actualiza mientras se escribe sin saturar la API con una
   // petición por cada pulsación.
@@ -350,11 +351,13 @@ export default function ReportsView() {
 
   useEffect(() => { load(); }, [load]);
 
-  const rows = useMemo(() => calls.map(toReportRow), [calls]);
-  const showLoteColumn = rows.some((row) => row.isCobros);
   const activeAreaName = effectiveAreaId != null
     ? (areas.find((area) => area.id === effectiveAreaId)?.area || '')
     : areaName;
+  const isCobrosArea = effectiveAreaId != null && activeAreaName.trim().toLowerCase() === 'cobros';
+  const filterCommitments = isCobrosArea && commitmentOnly;
+  const rows = useMemo(() => calls.map(toReportRow).filter((row) => !filterCommitments || row.commitment !== '—'), [calls, filterCommitments]);
+  const showLoteColumn = rows.some((row) => row.isCobros);
   const isTelemarketing = activeAreaName.trim().toLowerCase() === 'telemarketing';
   const dateHeader = isTelemarketing
     ? 'Fecha de cita'
@@ -369,7 +372,7 @@ export default function ReportsView() {
   const exportRows = async () => {
     setExporting(true); setError('');
     try {
-      const sourceRows = calls.length ? rows : (await fetchAll()).map(toReportRow);
+      const sourceRows = calls.length ? rows : (await fetchAll()).map(toReportRow).filter((row) => !filterCommitments || row.commitment !== '—');
       const followUps = await fetchFollowUps();
       const followUpsByCallId = new Map();
       followUps.forEach((followUp) => {
@@ -397,6 +400,7 @@ export default function ReportsView() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm text-gray-600 w-40">Desde<input type="date" value={dateStart} max={dateEnd || undefined} onChange={(event) => changeStart(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
         <label className="text-sm text-gray-600 w-40">Hasta<input type="date" value={dateEnd} min={dateStart || undefined} onChange={(event) => changeEnd(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
+        {isCobrosArea && <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm text-gray-600"><input type="checkbox" role="switch" checked={commitmentOnly} onChange={(event) => { setCommitmentOnly(event.target.checked); setTablePage(1); }} className="peer sr-only" /><span aria-hidden="true" className="relative h-6 w-11 rounded-full bg-gray-300 transition-colors peer-checked:bg-[#053E68] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#053E68] after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5" />Compromiso de Pago</label>}
         <label className="text-sm text-gray-600 w-52">Cliente<input type="search" value={clientInput} onChange={(event) => setClientInput(event.target.value)} placeholder="Nombre de cliente..." className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg" /></label>
         <label className="text-sm text-gray-600 w-40">Estado<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg bg-white"><option value="">Todos</option><option value="completed">Completadas</option><option value="voicemail">Buzón</option></select></label>
       </div>

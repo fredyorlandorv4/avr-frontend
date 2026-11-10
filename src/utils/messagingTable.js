@@ -1,12 +1,17 @@
 export const messageLots = delivery => (Array.isArray(delivery.lotes) ? delivery.lotes : [])
   .map(lot => typeof lot === 'string' ? lot : lot?.lote).filter(Boolean).join(', ');
 
+export const messageDate = delivery => delivery.sent_at || delivery.created_at || delivery.runDate || '';
+export const messageCountry = delivery => delivery.pais || delivery.country || '';
+export const messageSender = delivery => delivery.usuario_envio || delivery.sent_by || '';
+
 export function messageStatus(delivery) {
   const status = String(delivery.status || '').toLowerCase();
   if (['accepted', 'sent', 'completed'].includes(status)) return { key: 'sent', label: 'Enviado', className: 'bg-emerald-100 text-emerald-800' };
   if (['sending', 'processing', 'in_progress'].includes(status) || (status === 'pending' && Number(delivery.attempts) > 0)) return { key: 'sending', label: 'Enviando', className: 'bg-blue-100 text-blue-800' };
   if (['pending', 'scheduled', 'queued', 'enqueued'].includes(status)) return { key: 'queued', label: 'En cola', className: 'bg-amber-100 text-amber-800' };
   if (status === 'failed') return { key: 'failed', label: 'Fallido', className: 'bg-red-100 text-red-800' };
+  if (['cancelled', 'canceled'].includes(status)) return { key: 'cancelled', label: 'Cancelado', className: 'bg-slate-200 text-slate-700' };
   return { key: status || 'unknown', label: status || '—', className: 'bg-slate-100 text-slate-700' };
 }
 
@@ -14,7 +19,9 @@ export const messageTypeLabel = type => ({ collection: 'Cobro', reminder: 'Recor
 const normalized = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
 const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
 const columnValue = (delivery, key) => ({
-  date: delivery.runDate || '', client: delivery.nombre_cliente || '', project: delivery.displayProject || delivery.proyecto || '',
+  date: messageDate(delivery), code: delivery.codigo_cliente || '', client: delivery.nombre_cliente || '',
+  phone: delivery.telefono || '', country: messageCountry(delivery), sender: messageSender(delivery), error: delivery.error_message || '',
+  project: delivery.displayProject || delivery.proyecto || '',
   lot: messageLots(delivery), type: messageTypeLabel(delivery.displayType),
   message: delivery.message || '', status: messageStatus(delivery).label,
 })[key] || '';

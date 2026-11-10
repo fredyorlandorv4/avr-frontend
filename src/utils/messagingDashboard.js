@@ -1,3 +1,5 @@
+import { portfolioClientId } from './accessScopes.js';
+
 const normalize = value => String(value || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').replace(/\s+/g, ' ');
 
 export function buildMessagingDashboard(clients, deliveries, configs) {
@@ -14,18 +16,29 @@ export function buildMessagingDashboard(clients, deliveries, configs) {
     return matches?.size === 1 ? [...matches][0] : company;
   };
   const groups = new Map();
+  const pendingClients = new Set();
+  const pendingProjects = new Set();
   const groupFor = (source, company, project) => {
     const key = JSON.stringify([source, normalize(company), normalize(project)]);
     if (!groups.has(key)) groups.set(key, { key, source, company: company || 'Sin empresa', project: project || 'Sin proyecto', cents: 0, sent: 0 });
     return groups.get(key);
   };
-  for (const client of clients || []) {
+  for (const [index, client] of (clients || []).entries()) {
     const source = client.tipo_cartera || 'lotes';
+    let clientHasPending = Number(client.total_pendiente ?? client.saldo_total) > 0;
     for (const lot of client.lotes || []) {
       const company = source === 'edificios' ? lot.proyecto : client.empresa;
       const project = source === 'edificios' ? buildingProject(company) : lot.proyecto;
       groupFor(source, company, project).cents += Math.round((Number(lot.total_pendiente_lote) || 0) * 100);
+      const installments = lot.cuotas_atrasadas ?? lot.cuotas ?? lot.installments ?? [];
+      const hasPending = Number(lot.total_pendiente_lote ?? lot.total_pendiente ?? lot.subtotal) > 0 ||
+        (Array.isArray(installments) && installments.some(item => Number(item.total_a_pagar ?? item.saldo ?? item.monto_pendiente) > 0));
+      if (hasPending) {
+        clientHasPending = true;
+        if (company && project) pendingProjects.add(JSON.stringify([source, normalize(company), normalize(project)]));
+      }
     }
+    if (clientHasPending) pendingClients.add(portfolioClientId(client, index));
   }
   for (const delivery of deliveries || []) {
     const source = delivery.tipo_cartera || 'lotes';
@@ -39,5 +52,5 @@ export function buildMessagingDashboard(clients, deliveries, configs) {
     totals.sent += row.sent;
     totals[row.source === 'edificios' ? 'USD' : 'GTQ'] += row.cents;
   }
-  return { rows, totals };
+  return { rows, totals, pendingClientCount: pendingClients.size, pendingProjectCount: pendingProjects.size };
 }

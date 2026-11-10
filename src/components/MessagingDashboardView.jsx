@@ -13,6 +13,19 @@ const today = () => {
 const startDate = () => { const date = new Date(`${today()}T12:00:00Z`); date.setUTCDate(date.getUTCDate() - 29); return date.toISOString().slice(0, 10); };
 const fieldClass = 'rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700';
 
+function PortfolioCounts({ title, pendingLabel, pending, currentLabel, loading }) {
+  return <section className="rounded-2xl border border-gray-100 bg-white p-5">
+    <h2 className="font-semibold text-[#053E68]">{title}</h2>
+    <div className="mt-4 space-y-4">
+      <div>
+        <div className="flex items-baseline justify-between gap-3 text-sm"><span className="text-gray-700">{pendingLabel}</span><strong className="text-lg text-[#053E68]">{loading ? '…' : pending.toLocaleString('es-GT')}</strong></div>
+      </div>
+      <div className="flex items-baseline justify-between gap-3 text-sm"><span className="text-gray-700">{currentLabel}</span><strong className="text-gray-500">No disponible</strong></div>
+    </div>
+    <p className="mt-4 text-xs text-gray-500">Consulta SAP proporciona cartera con saldo pendiente; no incluye el total necesario para calcular los registros sin saldo.</p>
+  </section>;
+}
+
 export default function MessagingDashboardView() {
   const { authToken, logout, sapSources } = useAuth();
   const [from, setFrom] = useState(startDate);
@@ -46,9 +59,8 @@ export default function MessagingDashboardView() {
   }, [authToken, logout, from, to, source]);
 
   useEffect(() => { const signal = { cancelled: false }; load(signal); return () => { signal.cancelled = true; }; }, [load, refresh]);
-  const { rows, totals } = useMemo(() => buildMessagingDashboard(data.clients, data.deliveries, data.configs), [data]);
+  const { rows, totals, pendingClientCount, pendingProjectCount } = useMemo(() => buildMessagingDashboard(data.clients, data.deliveries, data.configs), [data]);
   const maxSent = Math.max(1, ...rows.map(row => row.sent));
-  const maxDebt = { lotes: Math.max(1, ...rows.filter(row => row.source === 'lotes').map(row => row.cents)), edificios: Math.max(1, ...rows.filter(row => row.source === 'edificios').map(row => row.cents)) };
 
   return <div className="mx-auto max-w-[1280px] space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -67,13 +79,17 @@ export default function MessagingDashboardView() {
       <div className="rounded-2xl border border-gray-100 bg-white p-5"><p className="text-sm text-gray-500">Mensajes enviados en el período</p><p className="mt-2 text-2xl font-bold text-[#053E68]">{loading ? '…' : totals.sent.toLocaleString('es-GT')}</p><p className="mt-1 text-xs text-gray-500">Envíos aceptados por Evolution, según fecha de envío.</p></div>
       <div className="rounded-2xl border border-gray-100 bg-white p-5"><p className="text-sm text-gray-500">Cartera actual de Consulta SAP</p><div className="mt-2 flex flex-wrap gap-x-5 text-2xl font-bold text-[#053E68]">{loading ? '…' : <>{(source !== 'edificios' && sapSources.includes('lotes')) && <span>{formatPortfolioMoney(totals.GTQ / 100, 'GTQ')}</span>}{(source !== 'lotes' && sapSources.includes('edificios')) && <span>{formatPortfolioMoney(totals.USD / 100, 'USD')}</span>}</>}</div><p className="mt-1 text-xs text-gray-500">Saldo actual; no cambia con el período de mensajes.</p></div>
     </div>
+    {!error && <div className="grid gap-5 lg:grid-cols-2">
+      <PortfolioCounts title="Estado de clientes" pendingLabel="Clientes con saldo pendiente" pending={pendingClientCount} currentLabel="Clientes al día" loading={loading} />
+      <PortfolioCounts title="Estado de proyectos" pendingLabel="Proyectos con saldo pendiente" pending={pendingProjectCount} currentLabel="Proyectos sin cuota pendiente" loading={loading} />
+    </div>}
     <section className="rounded-2xl border border-gray-100 bg-white p-5">
-      <h2 className="font-semibold text-[#053E68]">Mensajes y cartera por proyecto / empresa</h2>
-      <p className="mt-1 text-sm text-gray-500">Azul: mensajes enviados. Amarillo: cartera actual. Las escalas son independientes para mensajes, quetzales y dólares; se respetan los filtros de Consulta SAP.</p>
+      <h2 className="font-semibold text-[#053E68]">Mensajes enviados por proyecto</h2>
+      <p className="mt-1 text-sm text-gray-500">Envíos aceptados en el período seleccionado. El saldo corresponde a la cartera actual.</p>
       {loading ? <p className="py-10 text-center text-gray-500">Cargando estadísticas…</p> : !rows.length ? <p className="py-10 text-center text-gray-500">No hay datos para los filtros seleccionados.</p> : <div className="mt-4 space-y-3">{rows.map(row => <div key={row.key} className="grid gap-2 border-t border-gray-100 pt-3 sm:grid-cols-[minmax(150px,1fr)_minmax(120px,2fr)_140px] sm:items-center">
         <div className="min-w-0"><p className="break-words font-medium text-gray-800">{row.project}</p><p className="text-xs text-gray-500">{row.company} · {row.source === 'edificios' ? 'Edificios' : 'Lotes'}</p></div>
-        <div className="space-y-2"><div className="flex items-center gap-2"><div className="h-4 flex-1 overflow-hidden rounded bg-gray-100"><div className="h-full rounded bg-[#0B5F8F]" style={{ width: `${row.sent / maxSent * 100}%` }} /></div><span className="min-w-8 text-right text-sm font-semibold text-gray-700">{row.sent}</span></div><div className="mr-10 h-4 overflow-hidden rounded bg-gray-100"><div className="h-full rounded bg-[#F4CD04]" style={{ width: `${row.cents / maxDebt[row.source === 'edificios' ? 'edificios' : 'lotes'] * 100}%` }} /></div></div>
-        <div className="text-right text-sm font-semibold text-[#053E68]">{formatPortfolioMoney(row.cents / 100, row.source === 'edificios' ? 'USD' : 'GTQ')}</div>
+        <div><div className="mb-1 flex justify-between gap-2 text-sm"><span className="text-gray-500">Mensajes enviados</span><strong className="text-[#053E68]">{row.sent.toLocaleString('es-GT')}</strong></div><div className="h-3 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-[#0B5F8F]" style={{ width: `${row.sent / maxSent * 100}%` }} /></div></div>
+        <div className="text-sm sm:text-right"><span className="block text-xs text-gray-500">Saldo pendiente</span><strong className="text-[#053E68]">{formatPortfolioMoney(row.cents / 100, row.source === 'edificios' ? 'USD' : 'GTQ')}</strong></div>
       </div>)}</div>}
     </section>
   </div>;
