@@ -542,6 +542,12 @@ export default function OverduePortfolioView() {
       let skipped = 0;
       const groups = [];
       for (const source of ["lotes", "edificios"]) {
+        if (source === "edificios") {
+          const selections = targets.filter((target) => target.source === source).map(({ selection }) => selection);
+          const unique = [...new Map(selections.map((item) => [messageSelectionKey(item), item])).values()];
+          if (unique.length) groups.push({ type: "Mensaje", body: { tipo_cartera: source, collection_selections: unique }, count: unique.length });
+          continue;
+        }
         const collections = [];
         const remindersByDate = new Map();
         targets.filter((target) => target.source === source).forEach(({ selection, dueDates }) => {
@@ -550,7 +556,7 @@ export default function OverduePortfolioView() {
             collections.push(selection);
             return;
           }
-          const next = dates.filter(({ days }) => days >= 0 && days <= 3)
+          const next = dates.filter(({ days }) => days >= 0)
             .sort((a, b) => a.days - b.days)[0];
           if (!next) {
             skipped += 1;
@@ -605,7 +611,7 @@ export default function OverduePortfolioView() {
           if (deliveryKeys.length) groups.push({ type: "Recordatorio", body: { tipo_cartera: source, due_date: dueDate, delivery_keys: deliveryKeys }, count: deliveryKeys.length });
         });
       }
-      if (!groups.length) throw new Error("Ninguno de los clientes seleccionados tiene cuotas vencidas ni recordatorios disponibles para los próximos 3 días.");
+      if (!groups.length) throw new Error("Ninguno de los clientes seleccionados tiene cuotas vencidas ni recordatorios disponibles.");
       setMessageSelection({ groups, skipped });
     } catch (prepareError) {
       if (prepareError.message !== "Unauthorized") setMessageError(prepareError.message || "No se pudieron preparar los mensajes.");
@@ -1170,7 +1176,7 @@ export default function OverduePortfolioView() {
               ))}
               {messageSelection.skipped > 0 && (
                 <p className="rounded-lg bg-amber-50 p-3 text-amber-800">
-                  {messageSelection.skipped} selección(es) no se enviarán: su cuota aún no entra en los próximos 3 días o no aparece como recordatorio disponible en SAP.
+                  {messageSelection.skipped} selección(es) no se enviarán porque no aparecen como recordatorio disponible en SAP.
                 </p>
               )}
               {messageError && <p className="rounded-lg bg-red-50 p-3 text-red-700">{messageError}</p>}
