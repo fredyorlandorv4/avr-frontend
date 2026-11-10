@@ -487,19 +487,34 @@ export default function MessagingQueueView() {
           <select aria-label="Filtrar por cartera" value={sourceFilter} onChange={event => { setSourceFilter(event.target.value); setMessagePage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"><option value="">Todas las carteras</option>{sapSources.includes('lotes') && <option value="lotes">Lotes</option>}{sapSources.includes('edificios') && <option value="edificios">Edificios</option>}</select>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[2200px] text-left text-sm">
+          <table className="w-[2200px] min-w-full table-fixed border-collapse text-left text-sm">
+            <colgroup>
+              <col className="w-[180px]" />
+              <col className="w-[150px]" />
+              <col className="w-[230px]" />
+              <col className="w-[160px]" />
+              <col className="w-[110px]" />
+              <col className="w-[170px]" />
+              <col className="w-[160px]" />
+              <col className="w-[160px]" />
+              <col className="w-[150px]" />
+              <col className="w-[180px]" />
+              <col className="w-[130px]" />
+              <col className="w-[210px]" />
+              <col className="w-[210px]" />
+            </colgroup>
             <thead className="bg-[#053E68] text-white">
               <tr>
                 {[["Fecha y Hora", "date"], ["Código de Cliente", "code"], ["Cliente", "client"], ["Teléfono", "phone"], ["País", "country"], ["Proyecto", "project"], ["Manzana/Lote", "lot"], ["Usuario Envío", "sender"], ["Tipo", "type"], ["Mensaje", "message"], ["Estado", "status"], ["Progreso", "progress"], ["Error", "error"]].map(
                   ([header, key]) => (
-                    <th key={key} aria-sort={key === 'progress' ? undefined : sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className="px-4 py-3 font-semibold">
+                    <th key={key} aria-sort={key === 'progress' ? undefined : sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className="border-b border-r border-white/20 px-4 py-3 text-left align-middle font-semibold">
                       {key === 'progress' ? header : <button type="button" onClick={() => changeSort(key)} className="text-left">{header}{sort.key === key ? (sort.direction === 'desc' ? ' ↓' : ' ↑') : ''}</button>}
                     </th>
                   ),
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="border-slate-200 [&_td]:border-b [&_td]:border-r [&_td]:border-inherit [&_td]:align-middle">
               {invalidRange ? (
                 <tr><td colSpan="13" className="px-4 py-12 text-center text-slate-500">Selecciona un rango válido.</td></tr>
               ) : loading ? (
@@ -553,7 +568,7 @@ export default function MessagingQueueView() {
                             }
                           }}
                           title="Doble clic para ver el mensaje completo"
-                          className="block w-full min-w-0 truncate rounded px-1 py-1 text-left text-slate-700 hover:bg-blue-50 hover:text-[#053E68]"
+                          className="block w-full truncate rounded py-1 text-left text-slate-700 hover:bg-blue-50 hover:text-[#053E68]"
                         >
                           {delivery.message || "Mensaje aún no generado"}
                         </button>
