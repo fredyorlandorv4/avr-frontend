@@ -37,6 +37,10 @@ const formatCommitmentDate = (date) => date.toLocaleDateString('es-GT', {
 });
 
 function commitmentDate(call) {
+  if (String(call.area_name || call.area || '').trim().toLowerCase() === 'cobros' && Object.hasOwn(call, 'payment_commitment_date')) {
+    const value = call.payment_commitment_date;
+    return value ? formatCommitmentDate(new Date(`${String(value).slice(0, 10)}T00:00:00Z`)) : '';
+  }
   // "Resumen" es la fuente acordada: evita mostrar textos de follow-up u otros
   // campos del análisis que no son una fecha de compromiso.
   const summary = call.analysis?.summary;

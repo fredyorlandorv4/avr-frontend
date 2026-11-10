@@ -184,7 +184,7 @@ export default function OverduePortfolioView() {
   const { authToken, logout, isSystem, areaId, sapSources } = useAuth();
   const { areas } = useArea();
   const navigate = useNavigate();
-  const [clients, setClients] = useState([]);
+  const [allClients, setAllClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedClients, setExpandedClients] = useState(new Set());
@@ -207,6 +207,8 @@ export default function OverduePortfolioView() {
   const [projectFilter, setProjectFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [portfolioFilter, setPortfolioFilter] = useState('todo');
+  const allowedSourcesKey = sapSources.slice().sort().join('|');
+  const clients = useMemo(() => allClients.filter(client => allowedSourcesKey.split('|').includes(client.source) && (portfolioFilter === 'todo' || client.source === portfolioFilter)), [allClients, portfolioFilter, allowedSourcesKey]);
   const selectAllRef = useRef(null);
   const loadSequence = useRef(0);
   const canViewBuildings = sapSources.includes("edificios");
@@ -220,10 +222,10 @@ export default function OverduePortfolioView() {
     const sequence = ++loadSequence.current;
     setLoading(true);
     setError("");
-    setClients([]);
+    setAllClients([]);
     if (!preserveSelection) setSelectedClientIds(new Set());
     try {
-      const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${portfolioFilter}`, {
+      const response = await apiFetch('/api/v1/cobros/cartera-vencida?tipo=todo', {
         token: authToken,
         onUnauthorized: logout,
       });
@@ -263,12 +265,12 @@ export default function OverduePortfolioView() {
         }
       }
       if (sequence !== loadSequence.current) return;
-      const refreshedClients = normalizeClients(payload, buildingProjects);
+      const refreshedClients = normalizeClients(payload, buildingProjects).filter(client => allowedSourcesKey.split('|').includes(client.source));
       const availableClientIds = new Set(refreshedClients.map((client) => client.id));
       const retainedClientIds = new Set(
         [...previousSelectedIds].filter((id) => availableClientIds.has(id)),
       );
-      setClients(refreshedClients);
+      setAllClients(refreshedClients);
       setExpandedClients(new Set());
       setExpandedLots(new Set());
       setSelectedClientIds(retainedClientIds);
@@ -282,7 +284,7 @@ export default function OverduePortfolioView() {
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [authToken, logout, portfolioFilter, canViewBuildings]);
+  }, [authToken, logout, canViewBuildings, allowedSourcesKey]);
 
   useEffect(() => {
     load();
