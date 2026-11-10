@@ -489,6 +489,7 @@ export default function MessagingQueueView() {
         <div className="overflow-x-auto">
           <table className="w-[2200px] min-w-full table-fixed border-collapse text-left text-sm">
             <colgroup>
+              <col className="w-[210px]" />
               <col className="w-[180px]" />
               <col className="w-[150px]" />
               <col className="w-[230px]" />
@@ -501,11 +502,10 @@ export default function MessagingQueueView() {
               <col className="w-[180px]" />
               <col className="w-[130px]" />
               <col className="w-[210px]" />
-              <col className="w-[210px]" />
             </colgroup>
             <thead className="bg-[#053E68] text-white">
               <tr>
-                {[["Fecha y Hora", "date"], ["Código de Cliente", "code"], ["Cliente", "client"], ["Teléfono", "phone"], ["País", "country"], ["Proyecto", "project"], ["Manzana/Lote", "lot"], ["Usuario Envío", "sender"], ["Tipo", "type"], ["Mensaje", "message"], ["Estado", "status"], ["Progreso", "progress"], ["Error", "error"]].map(
+                {[["Progreso", "progress"], ["Fecha y Hora", "date"], ["Código de Cliente", "code"], ["Cliente", "client"], ["Teléfono", "phone"], ["País", "country"], ["Proyecto", "project"], ["Manzana/Lote", "lot"], ["Usuario Envío", "sender"], ["Tipo", "type"], ["Mensaje", "message"], ["Estado", "status"], ["Error", "error"]].map(
                   ([header, key]) => (
                     <th key={key} aria-sort={key === 'progress' ? undefined : sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className="border-b border-r border-white/20 px-4 py-3 text-left align-middle font-semibold">
                       {key === 'progress' ? header : <button type="button" onClick={() => changeSort(key)} className="text-left">{header}{sort.key === key ? (sort.direction === 'desc' ? ' ↓' : ' ↑') : ''}</button>}
@@ -531,6 +531,7 @@ export default function MessagingQueueView() {
                   const status = statusOf(delivery);
                   return (
                     <tr key={delivery.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3"><DeliveryProgress delivery={delivery} onCancel={cancelDelivery} cancelling={cancelling} /></td>
                       <td className="px-4 py-3 text-slate-700">{displayDate(delivery)}</td>
                       <td className="px-4 py-3 text-slate-700">{delivery.codigo_cliente || "—"}</td>
                       <td
@@ -580,7 +581,6 @@ export default function MessagingQueueView() {
                           {status.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3"><DeliveryProgress delivery={delivery} onCancel={cancelDelivery} cancelling={cancelling} /></td>
                       <td className="min-w-48 whitespace-pre-wrap break-words px-4 py-3 text-red-700">{delivery.error_message || ""}</td>
                     </tr>
                   );
