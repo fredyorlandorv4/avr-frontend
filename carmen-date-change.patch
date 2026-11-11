@@ -1,0 +1,15 @@
+--- a/app/services/carmen_reminders.py
++++ b/app/services/carmen_reminders.py
+@@ -272,6 +272,12 @@
+             "no repitas esos datos. Usa solo los datos proporcionados y no inventes saldos, fechas ni días. "
+             "Menciona que la imagen adjunta muestra la cuenta para realizar el pago. "
+             "Devuelve solo la introducción, sin título ni explicación. Máximo 320 caracteres."
++        )
++    if message_type == "reminder":
++        instructions += (
++            " Si se proporciona fecha_vencimiento, decide seg?n el contexto si expresarla "
++            "como fecha exacta o como finales de mes; usa finales de mes solo cuando "
++            "corresponda realmente a la fecha indicada. Si no hay fecha, no la inventes."
+         )
+     instructions += (
+         " Todo importe monetario y cada nombre de lote que menciones deben escribirse "
