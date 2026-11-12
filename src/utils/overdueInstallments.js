@@ -77,7 +77,10 @@ export function matchesPaymentStatus(installments, status, daysUntilPayment) {
   return installments.some((installment) =>
     (installment.dueDates || [installment.dueDate]).some((date) => {
       const days = daysUntilPayment(date);
-      return days !== null && (status === 'upcoming' ? days >= 0 && days <= 3 : days < 0);
+      if (days === null) return false;
+      if (status === 'upcoming') return days >= 0 && days <= 3;
+      if (status === 'reminder') return days > 3;
+      return status === 'overdue' && days < 0;
     }),
   );
 }

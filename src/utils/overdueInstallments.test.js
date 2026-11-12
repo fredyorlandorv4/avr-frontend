@@ -59,6 +59,16 @@ test('detecta cuotas por vencer y vencidas aunque estén agrupadas en el mismo m
   assert.equal(matchesPaymentStatus(groups, 'upcoming', () => 4), false);
 });
 
+test('clasifica recordatorios con más de tres días y respeta los límites de los demás estados', () => {
+  const installments = [{ dueDates: ['fecha'] }];
+  for (const [days, expected] of [[-1, 'overdue'], [0, 'upcoming'], [3, 'upcoming'], [4, 'reminder']]) {
+    for (const status of ['overdue', 'upcoming', 'reminder']) {
+      assert.equal(matchesPaymentStatus(installments, status, () => days), status === expected);
+    }
+  }
+  assert.equal(matchesPaymentStatus(installments, 'reminder', () => null), false);
+});
+
 test('genera las columnas requeridas por la campaña de cobros desde Consulta SAP', () => {
   assert.deepEqual(campaignDebtColumns({
     pendingTotal: 1000,

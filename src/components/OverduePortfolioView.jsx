@@ -784,6 +784,7 @@ export default function OverduePortfolioView() {
             >
               <option value="all">Todos</option>
               <option value="upcoming">Por Vencer</option>
+              <option value="reminder">Recordatorio</option>
               <option value="overdue">Vencidos</option>
             </select>
           </label>
