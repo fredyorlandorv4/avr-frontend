@@ -62,6 +62,16 @@ export function groupOverdueInstallments(installments) {
     }));
 }
 
+// Conserva deudas anteriores y del mes actual; las cuotas posteriores no son
+// recordatorios del mes. Las cuotas sin fecha siguen visibles para revisión.
+export function currentMonthBuildingInstallments(installments, today) {
+  const currentMonth = String(today).slice(0, 7);
+  return installments.filter((installment) => {
+    const dueDate = String(installment.dueDate || '').slice(0, 10);
+    return !validDate(dueDate) || dueDate.slice(0, 7) <= currentMonth;
+  });
+}
+
 export function matchesPaymentStatus(installments, status, daysUntilPayment) {
   if (status === 'all') return true;
   return installments.some((installment) =>

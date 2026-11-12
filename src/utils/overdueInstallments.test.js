@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { campaignDebtColumns, groupOverdueInstallments, matchesPaymentStatus } from './overdueInstallments.js';
+import { campaignDebtColumns, currentMonthBuildingInstallments, groupOverdueInstallments, matchesPaymentStatus } from './overdueInstallments.js';
+
+test('Edificios conserva cuotas vencidas y del mes actual, excluyendo meses posteriores incluso al cambiar de año', () => {
+  const rows = ['2026-11-30', '2026-12-31', '2027-01-01'].map(fecha_compromiso => ({ fecha_compromiso, saldo: 100 }));
+  const groups = groupOverdueInstallments(rows);
+  assert.deepEqual(currentMonthBuildingInstallments(groups, '2026-12-15').map(item => item.dueDate), ['2026-11-30', '2026-12-31']);
+  assert.deepEqual(currentMonthBuildingInstallments(groups, '2026-10-31'), []);
+  assert.equal(currentMonthBuildingInstallments(groups, '2027-01-01').length, 3);
+});
 
 test('combina saldos del mismo mes y numera las cuotas desde uno', () => {
   const rows = [
