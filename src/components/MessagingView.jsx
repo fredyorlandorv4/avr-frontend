@@ -16,6 +16,7 @@ const initialForm = {
   evolution_instance: "",
   active: true,
   image: null,
+  statement_logo: null,
 };
 const initialPromptEditors = {
   collection: { value: "", dirty: false },
@@ -72,7 +73,7 @@ function ImagePreview({ imageUrl, onOpen }) {
     >
       <img
         src={source}
-        alt="Vista previa de imagen bancaria"
+        alt="Vista previa de imagen guardada"
         className="h-14 w-20 rounded-lg border border-slate-200 object-cover shadow-sm transition hover:opacity-80"
       />
     </button>
@@ -113,7 +114,7 @@ function SavedImageModal({ imageUrl, onClose }) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Imagen bancaria guardada"
+        aria-label="Imagen guardada"
         className="relative max-h-[90vh] w-full max-w-5xl rounded-2xl bg-white p-4 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -126,7 +127,7 @@ function SavedImageModal({ imageUrl, onClose }) {
           <X className="h-5 w-5" />
         </button>
         {source ? (
-          <img src={source} alt="Imagen bancaria guardada" className="max-h-[82vh] w-full rounded-xl object-contain" />
+          <img src={source} alt="Imagen guardada" className="max-h-[82vh] w-full rounded-xl object-contain" />
         ) : (
           <p className="p-12 text-center text-slate-500">{error || "Cargando imagen guardada…"}</p>
         )}
@@ -167,6 +168,7 @@ export default function MessagingView() {
   const [error, setError] = useState("");
   const [selectedImageUrl, setSelectedImageUrl] = useState("");
   const fileInput = useRef(null);
+  const logoInput = useRef(null);
   const projectFormRef = useRef(null);
 
   const load = useCallback(
@@ -293,6 +295,12 @@ export default function MessagingView() {
       setError("La imagen debe ser JPEG, PNG o WEBP y pesar como máximo 5 MB.");
       return;
     }
+    if (form.statement_logo &&
+      (!["image/jpeg", "image/png", "image/webp"].includes(form.statement_logo.type) ||
+        form.statement_logo.size > 5 * 1024 * 1024)) {
+      setError("El logo debe ser JPEG, PNG o WEBP y pesar como máximo 5 MB.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -302,6 +310,7 @@ export default function MessagingView() {
       body.append("evolution_instance", form.evolution_instance);
       body.append("active", String(form.active));
       if (form.image) body.append("image", form.image);
+      if (form.statement_logo) body.append("statement_logo", form.statement_logo);
       const url = editingProject
         ? `/api/v1/cobros/reminders/projects/${editingProject.id}`
         : "/api/v1/cobros/reminders/projects";
@@ -318,6 +327,7 @@ export default function MessagingView() {
       setForm(initialForm);
       setEditingProject(null);
       if (fileInput.current) fileInput.current.value = "";
+      if (logoInput.current) logoInput.current.value = "";
       await load(true);
     } catch (requestError) {
       if (requestError.message !== "Unauthorized")
@@ -359,8 +369,10 @@ export default function MessagingView() {
       evolution_instance: valueOf(project, ["evolution_instance"], ""),
       active: asBoolean(project.active),
       image: null,
+      statement_logo: null,
     });
     if (fileInput.current) fileInput.current.value = "";
+    if (logoInput.current) logoInput.current.value = "";
     window.requestAnimationFrame(() => {
       projectFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       projectFormRef.current?.querySelector('input[name="company_name"]')?.focus();
@@ -371,6 +383,7 @@ export default function MessagingView() {
     setEditingProject(null);
     setForm(initialForm);
     if (fileInput.current) fileInput.current.value = "";
+    if (logoInput.current) logoInput.current.value = "";
   };
 
   return (
@@ -610,6 +623,16 @@ export default function MessagingView() {
               />
             </span>
           </label>
+          <label className="lg:col-span-4">
+            <span className="mb-1.5 block text-xs font-semibold text-slate-600">Logo Estado de Cuenta (opcional)</span>
+            <span className="flex h-[42px] items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 text-sm text-slate-500">
+              <FileImage className="h-4 w-4 text-[#0B5A8E]" />
+              <input ref={logoInput} type="file" accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => setForm((current) => ({ ...current, statement_logo: event.target.files?.[0] || null }))}
+                className="min-w-0 text-xs file:mr-2 file:border-0 file:bg-transparent file:font-medium file:text-[#053E68]" />
+            </span>
+            {editingProject?.statement_logo_filename && <span className="mt-1 block text-xs text-slate-500">Actual: {editingProject.statement_logo_filename}</span>}
+          </label>
           <div className="flex items-center justify-between gap-4 lg:col-span-12">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
               <input
@@ -653,6 +676,7 @@ export default function MessagingView() {
                   "Archivo",
                   "Estado",
                   "Vista previa",
+                  "Logo Estado de Cuenta",
                   "Acciones",
                 ].map((header) => (
                   <th key={header} className="px-3 py-3 font-semibold">
@@ -695,6 +719,9 @@ export default function MessagingView() {
                       imageUrl={valueOf(project, ["image_url"], "")}
                       onOpen={() => setSelectedImageUrl(valueOf(project, ["image_url"], ""))}
                     />
+                  </td>
+                  <td className="px-3 py-3">
+                    <ImagePreview key={`${project.id}-${project.updated_at}-logo`} imageUrl={project.statement_logo_url} onOpen={() => setSelectedImageUrl(project.statement_logo_url)} />
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-3">

@@ -20,13 +20,19 @@ export async function buildBuildingStatementPdf(statement) {
 
   const header = (unit, contractNumber) => {
     doc.setTextColor(15, 35, 52);
+    if (issuer.logo) {
+      const { width, height } = doc.getImageProperties(issuer.logo);
+      const scale = Math.min(32 / width, 21 / height);
+      doc.addImage(issuer.logo, 'PNG', margin, 10, width * scale, height * scale);
+    }
+    const headingX = issuer.logo ? 122 : pageWidth / 2;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
-    doc.text(issuer.company, pageWidth / 2, 18, { align: 'center' });
+    doc.text(doc.splitTextToSize(issuer.company, issuer.logo ? 140 : 180)[0], headingX, 18, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    doc.text(issuer.address, pageWidth / 2, 24, { align: 'center' });
-    doc.text(`NIT: ${issuer.nit}`, pageWidth / 2, 29, { align: 'center' });
+    doc.text(issuer.address, headingX, 24, { align: 'center', maxWidth: issuer.logo ? 140 : 180 });
+    doc.text(`NIT: ${issuer.nit}`, headingX, 29, { align: 'center' });
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(17);
     doc.text('Estado de Cuenta', pageWidth / 2, 42, { align: 'center' });
@@ -113,12 +119,15 @@ export async function buildBuildingStatementPdf(statement) {
       doc.addPage();
       header(unit, contractNumber);
     }
-    const unitBalance = rows.reduce((total, row) => total + Math.round(Number(row.balance || 0) * 100), 0) / 100;
+    const sum = (field) => rows.reduce((total, row) => total + Math.round(Number(row[field] || 0) * 100), 0) / 100;
     doc.setDrawColor(80, 95, 110);
     doc.line(margin, y + 2, right, y + 2);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(`Saldo unidad (USD): $${money(unitBalance)}`, right, y + 9, { align: 'right' });
+    doc.setFontSize(7);
+    doc.text('Total (USD)', columns[0][1] + 1, y + 8);
+    doc.text(money(sum('installment_amount')), columns[2][1] + 1, y + 8);
+    doc.text(money(sum('amount_paid')), columns[4][1] + 1, y + 8);
+    doc.text(money(sum('balance')), columns[5][1] + 1, y + 8);
     y += 17;
     const missing = [];
     if (!statement.sap_fields.receipt_number) missing.push('No. recibo');

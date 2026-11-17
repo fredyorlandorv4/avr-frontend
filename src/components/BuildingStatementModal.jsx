@@ -8,6 +8,23 @@ import { buildingCompanyKey, buildingProjectsByCompany } from '../utils/building
 
 const URL = '/api/v1/cobros/building-statements';
 
+async function logoAsPng(blob) {
+  const url = globalThis.URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1, 1000 / Math.max(image.naturalWidth, image.naturalHeight));
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  } finally {
+    globalThis.URL.revokeObjectURL(url);
+  }
+}
+
 export default function BuildingStatementModal({ onClose }) {
   const { authToken, logout } = useAuth();
   const [clients, setClients] = useState([]);
@@ -30,10 +47,12 @@ export default function BuildingStatementModal({ onClose }) {
     ])
       .then(([items, configs]) => {
         const projects = buildingProjectsByCompany(configs);
-        if (active) setClients(items.map((client) => ({
-          ...client,
-          building_name: projects.get(buildingCompanyKey(client.project)) || client.project,
-        })));
+        if (active) setClients(items.map((client) => {
+          const key = buildingCompanyKey(client.project);
+          const buildingName = projects.get(key);
+          const config = buildingName && configs.find((item) => item.active && buildingCompanyKey(item.company_name) === key);
+          return { ...client, building_name: buildingName || client.project, logo_url: config?.statement_logo_url };
+        }));
       })
       .catch((requestError) => {
         if (active && requestError.message !== 'Unauthorized') setError(requestError.message);
@@ -50,10 +69,17 @@ export default function BuildingStatementModal({ onClose }) {
       const response = await apiFetch(`${URL}?${query}`, { token: authToken, onUnauthorized: logout });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail?.message || body.detail || 'No se pudo consultar el estado de cuenta.');
+      let logo = null;
+      if (client.logo_url) {
+        const logoResponse = await apiFetch(client.logo_url, { token: authToken, onUnauthorized: logout });
+        if (!logoResponse.ok) throw new Error('No se pudo cargar el logo del estado de cuenta.');
+        try { logo = await logoAsPng(await logoResponse.blob()); }
+        catch { throw new Error('No se pudo leer el logo del estado de cuenta.'); }
+      }
       setSapInfo(body);
       await downloadBuildingStatement({
         ...body,
-        issuer: { ...body.issuer, company: client.project },
+        issuer: { ...body.issuer, company: client.project, logo },
         customer: { ...body.customer, project: client.building_name },
       });
     } catch (requestError) {

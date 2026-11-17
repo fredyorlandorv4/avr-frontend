@@ -60,3 +60,24 @@ test('muestra todos los números de recibo aunque ocupen varias páginas', async
   const content = pdf.internal.pages.slice(1).map((page) => page.join('')).join('');
   for (const receipt of receipts) assert.ok(content.includes(receipt), `Falta ${receipt}`);
 });
+
+test('imprime el logo y los totales de cuotas, pagos y saldo por unidad', async () => {
+  const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4XmP4z8AAAAMBAQAwOwdeAAAAAElFTkSuQmCC';
+  const pdf = await buildBuildingStatementPdf({
+    issuer: { company: 'Barozzi', address: 'Dirección', nit: '120526379', logo },
+    generated_at: '2026-11-17',
+    customer: { code: 'CL1', name: 'Cliente', project: 'Zona AX' },
+    sap_fields: { receipt_number: true, payment_date: true, contract_number: true },
+    installments: [
+      { unit: 'A', installment_amount: 100, amount_paid: 20, balance: 80 },
+      { unit: 'A', installment_amount: 200, amount_paid: 30, balance: 170 },
+      { unit: 'B', installment_amount: 500, amount_paid: 40, balance: 460 },
+    ],
+  });
+  const first = pdf.internal.pages[1].join('');
+  const second = pdf.internal.pages[2].join('');
+  for (const total of ['300.00', '50.00', '250.00']) assert.ok(first.includes(total));
+  for (const total of ['500.00', '40.00', '460.00']) assert.ok(second.includes(total));
+  assert.match(first, /\/I\d+ Do/);
+  assert.match(second, /\/I\d+ Do/);
+});
