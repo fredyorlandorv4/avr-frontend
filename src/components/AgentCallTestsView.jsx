@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../api.js";
+import BuildingStatementModal from "./BuildingStatementModal.jsx";
 
 const TERMINAL_STATUSES = new Set([
   "completed",
@@ -309,6 +310,7 @@ function CarmenTestModal({ onClose }) {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [statementOpen, setStatementOpen] = useState(false);
 
   const companies = [
     ...new Set(projects.map((project) => project.company_name).filter(Boolean)),
@@ -641,6 +643,13 @@ function CarmenTestModal({ onClose }) {
                   <option value="USD">Edificios (dólares)</option>
                 </select>
               </label>
+              {form.currency === "USD" && (
+                <div className="flex items-end">
+                  <button type="button" onClick={() => setStatementOpen(true)} className="w-full rounded-lg border border-[#053E68] px-4 py-2.5 text-sm font-semibold text-[#053E68] hover:bg-[#053E68]/5">
+                    Generar Estado de Cuenta
+                  </button>
+                </div>
+              )}
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 p-4">
               <div className="mb-3 flex items-center justify-between">
@@ -805,6 +814,7 @@ function CarmenTestModal({ onClose }) {
           </div>
         </div>
       )}
+      {statementOpen && <BuildingStatementModal onClose={() => setStatementOpen(false)} />}
     </>,
     document.body,
   );
