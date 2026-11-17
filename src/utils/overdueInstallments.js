@@ -72,6 +72,20 @@ export function currentMonthBuildingInstallments(installments, today) {
   });
 }
 
+// Calcula antes de agrupar por mes: dentro de un mismo mes puede haber
+// cuotas vencidas y otras que todavía no vencen.
+export function overdueInstallmentTotal(installments, today) {
+  if (!validDate(today) || !Array.isArray(installments)) return 0;
+  const cents = installments.reduce((sum, installment) => {
+    const rawDate = field(installment, ['fecha_compromiso', 'fecha_vencimiento', 'fecha_pago']);
+    const dueDate = String(rawDate).slice(0, 10);
+    if (!validDate(dueDate) || dueDate >= today) return sum;
+    const balance = Number(field(installment, ['total_a_pagar', 'saldo', 'monto_pendiente'], 0)) || 0;
+    return sum + Math.round(balance * 100);
+  }, 0);
+  return cents / 100;
+}
+
 export function matchesPaymentStatus(installments, status, daysUntilPayment) {
   if (status === 'all') return true;
   return installments.some((installment) =>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { campaignDebtColumns, currentMonthBuildingInstallments, groupOverdueInstallments, matchesPaymentStatus } from './overdueInstallments.js';
+import { campaignDebtColumns, currentMonthBuildingInstallments, groupOverdueInstallments, matchesPaymentStatus, overdueInstallmentTotal } from './overdueInstallments.js';
 
 test('Edificios conserva cuotas vencidas y del mes actual, excluyendo meses posteriores incluso al cambiar de año', () => {
   const rows = ['2026-11-30', '2026-12-31', '2027-01-01'].map(fecha_compromiso => ({ fecha_compromiso, saldo: 100 }));
@@ -8,6 +8,21 @@ test('Edificios conserva cuotas vencidas y del mes actual, excluyendo meses post
   assert.deepEqual(currentMonthBuildingInstallments(groups, '2026-12-15').map(item => item.dueDate), ['2026-11-30', '2026-12-31']);
   assert.deepEqual(currentMonthBuildingInstallments(groups, '2026-10-31'), []);
   assert.equal(currentMonthBuildingInstallments(groups, '2027-01-01').length, 3);
+});
+
+test('Lotes muestra meses anteriores y actual, pero suma únicamente cuotas vencidas por fecha', () => {
+  const rows = [
+    { fecha_compromiso: '2025-12-31', total_a_pagar: 100.10 },
+    { fecha_compromiso: '2026-01-03', total_a_pagar: 20.25 },
+    { fecha_compromiso: '2026-01-15', total_a_pagar: 30 },
+    { fecha_compromiso: '2026-01-31', total_a_pagar: 40 },
+    { fecha_compromiso: '2026-02-01', total_a_pagar: 50 },
+  ];
+  const visible = currentMonthBuildingInstallments(groupOverdueInstallments(rows), '2026-01-15');
+  assert.deepEqual(visible.map(item => item.dueDate), ['2025-12-31', '2026-01-03']);
+  assert.equal(visible[1].total, 90.25);
+  assert.equal(overdueInstallmentTotal(rows, '2026-01-15'), 120.35);
+  assert.equal(overdueInstallmentTotal(rows, '2026-01-01'), 100.1);
 });
 
 test('combina saldos del mismo mes y numera las cuotas desde uno', () => {

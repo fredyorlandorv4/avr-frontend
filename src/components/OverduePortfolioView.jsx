@@ -18,6 +18,7 @@ import {
   currentMonthBuildingInstallments,
   groupOverdueInstallments,
   matchesPaymentStatus,
+  overdueInstallmentTotal,
 } from "../utils/overdueInstallments.js";
 import { portfolioClientId } from "../utils/accessScopes.js";
 import { portfolioCurrency, formatPortfolioMoney } from "../utils/portfolioMoney.js";
@@ -67,6 +68,7 @@ const daysUntilPayment = (dueDate) => {
 };
 
 const normalizeClients = (payload, buildingProjects = new Map()) => {
+  const today = new Date(guatemalaToday()).toISOString().slice(0, 10);
   const clients = Array.isArray(payload)
     ? payload
     : payload?.clientes ||
@@ -79,12 +81,9 @@ const normalizeClients = (payload, buildingProjects = new Map()) => {
     const lots = value(client, ["lotes", "proyectos_lotes", "projects"], []);
     const normalizedLots = Array.isArray(lots)
       ? lots.map((lot, lotIndex) => {
-          const allInstallments = groupOverdueInstallments(
-            value(lot, ["cuotas_atrasadas", "cuotas", "installments"], []),
-          );
-          const installments = client.tipo_cartera === "edificios"
-            ? currentMonthBuildingInstallments(allInstallments, new Date(guatemalaToday()).toISOString().slice(0, 10))
-            : allInstallments;
+          const rawInstallments = value(lot, ["cuotas_atrasadas", "cuotas", "installments"], []);
+          const allInstallments = groupOverdueInstallments(rawInstallments);
+          const installments = currentMonthBuildingInstallments(allInstallments, today);
           return {
             id: String(
               value(lot, ["id", "lote_id", "lote", "codigo_lote"], lotIndex),
@@ -107,14 +106,13 @@ const normalizeClients = (payload, buildingProjects = new Map()) => {
               (count, installment) => count + installment.dueDates.filter((date) => daysUntilPayment(date) < 0).length,
               0,
             ),
-            pendingTotal: installments.length !== allInstallments.length
-              ? installments.reduce((sum, installment) => sum + Math.round(installment.total * 100), 0) / 100
+            pendingTotal: allInstallments.length
+              ? overdueInstallmentTotal(rawInstallments, today)
               : amount(lot, [
               "total_pendiente_lote",
               "total_pendiente",
               "subtotal",
             ]),
-            excludedFutureInstallments: installments.length !== allInstallments.length,
             hadInstallments: allInstallments.length > 0,
             installments,
           };
@@ -122,6 +120,7 @@ const normalizeClients = (payload, buildingProjects = new Map()) => {
       : [];
     return {
       source: client.tipo_cartera || 'lotes',
+      hadLots: Array.isArray(lots) && lots.length > 0,
       currency: portfolioCurrency(client),
       id: portfolioClientId(client, clientIndex),
       name: value(
@@ -140,12 +139,12 @@ const normalizeClients = (payload, buildingProjects = new Map()) => {
         (total, lot) => total + lot.overdueInstallments,
         0,
       ),
-      pendingTotal: client.tipo_cartera === "edificios" && (normalizedLots.some((lot) => lot.excludedFutureInstallments) || normalizedLots.length !== lots.length)
+      pendingTotal: normalizedLots.length
         ? normalizedLots.reduce((sum, lot) => sum + Math.round(lot.pendingTotal * 100), 0) / 100
         : amount(client, ["total_pendiente", "saldo_total"]),
       lots: normalizedLots,
     };
-  }).filter((client) => client.source !== "edificios" || client.lots.length > 0);
+  }).filter((client) => client.lots.length > 0 || (client.source !== "edificios" && !client.hadLots));
 };
 
 function messageFor(response, detail) {
