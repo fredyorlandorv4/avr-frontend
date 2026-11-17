@@ -22,6 +22,7 @@ import {
 import { portfolioClientId } from "../utils/accessScopes.js";
 import { portfolioCurrency, formatPortfolioMoney } from "../utils/portfolioMoney.js";
 import { portfolioMessageSelection as messageSelectionFor } from "../utils/portfolioMessaging.js";
+import { buildingCompanyKey, buildingProjectsByCompany } from "../utils/buildingProjectMatch.js";
 
 const value = (source, keys, fallback = "") => {
   for (const key of keys) {
@@ -37,7 +38,6 @@ const searchable = (value) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-const buildingCompanyKey = (name) => searchable(name).trim().replace(/\s+/g, " ");
 
 const guatemalaToday = () => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -259,15 +259,8 @@ export default function OverduePortfolioView() {
           });
           if (projectsResponse.ok) {
             const configs = await projectsResponse.json();
-            const byCompany = new Map();
-            configs.filter((config) => config.active).forEach((config) => {
-              const key = buildingCompanyKey(config.company_name);
-              const matches = byCompany.get(key) || [];
-              matches.push(config.project_name);
-              byCompany.set(key, matches);
-            });
-            byCompany.forEach((projects, key) => {
-              if (projects.length === 1) buildingProjects.set(key, projects[0]);
+            buildingProjectsByCompany(configs).forEach((project, company) => {
+              buildingProjects.set(company, project);
             });
           }
         } catch {

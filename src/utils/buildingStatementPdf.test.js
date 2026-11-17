@@ -21,3 +21,42 @@ test('genera un PDF multipágina con todas las cuotas del estado de cuenta', asy
   const bytes = Buffer.from(pdf.output('arraybuffer'));
   assert.equal(bytes.subarray(0, 4).toString(), '%PDF');
 });
+
+test('separa las unidades en estados de cuenta con encabezado, contrato y saldo propios', async () => {
+  const statement = {
+    issuer: { company: 'Barozzi', address: 'Dirección', nit: '120526379' },
+    generated_at: '2026-11-17T12:00:00-06:00',
+    customer: { code: 'CL1', name: 'Cliente', project: 'Zona AX', units: ['C-1', 'C-2'] },
+    sap_fields: { receipt_number: true, payment_date: true, contract_number: true },
+    installments: [
+      { unit: 'C-1', contract_number: 'Contrato-1', installment_number: 1, balance: 10 },
+      { unit: 'C-2', contract_number: 'Contrato-2', installment_number: 1, balance: 20 },
+    ],
+  };
+  const pdf = await buildBuildingStatementPdf(statement);
+  assert.equal(pdf.getNumberOfPages(), 2);
+  const firstPage = pdf.internal.pages[1].join('');
+  const secondPage = pdf.internal.pages[2].join('');
+  assert.match(firstPage, /Barozzi/);
+  assert.match(firstPage, /Zona AX/);
+  assert.match(firstPage, /Contrato-1/);
+  assert.doesNotMatch(firstPage, /C-2/);
+  assert.match(secondPage, /Barozzi/);
+  assert.match(secondPage, /Contrato-2/);
+  assert.match(secondPage, /C-2/);
+});
+
+test('muestra todos los números de recibo aunque ocupen varias páginas', async () => {
+  const receipts = Array.from({ length: 100 }, (_, index) => `RC-${String(index).padStart(3, '0')}`);
+  const pdf = await buildBuildingStatementPdf({
+    issuer: { company: 'Barozzi', address: 'Dirección', nit: '120526379' },
+    generated_at: '2026-11-17',
+    customer: { code: 'CL1', name: 'Cliente', project: 'Zona AX' },
+    sap_fields: { receipt_number: true, payment_date: true, contract_number: true },
+    installments: [{ unit: 'CL-705', installment_number: 1, balance: 10,
+      receipt_number: `,${receipts.join(',')}` }],
+  });
+  assert.ok(pdf.getNumberOfPages() > 1);
+  const content = pdf.internal.pages.slice(1).map((page) => page.join('')).join('');
+  for (const receipt of receipts) assert.ok(content.includes(receipt), `Falta ${receipt}`);
+});

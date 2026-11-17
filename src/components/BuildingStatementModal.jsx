@@ -4,6 +4,7 @@ import { FileDown, Loader2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiFetch } from '../api.js';
 import { downloadBuildingStatement } from '../utils/buildingStatementPdf.js';
+import { buildingCompanyKey, buildingProjectsByCompany } from '../utils/buildingProjectMatch.js';
 
 const URL = '/api/v1/cobros/building-statements';
 
@@ -17,11 +18,22 @@ export default function BuildingStatementModal({ onClose }) {
 
   useEffect(() => {
     let active = true;
-    apiFetch(`${URL}/clients`, { token: authToken, onUnauthorized: logout })
-      .then(async (response) => {
+    Promise.all([
+      apiFetch(`${URL}/clients`, { token: authToken, onUnauthorized: logout }).then(async (response) => {
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.detail?.message || body.detail || 'No se pudieron cargar los clientes de edificios.');
-        if (active) setClients(body.clients || []);
+        return body.clients || [];
+      }),
+      apiFetch('/api/v1/cobros/reminders/projects', { token: authToken, onUnauthorized: logout })
+        .then((response) => response.ok ? response.json() : [])
+        .catch(() => []),
+    ])
+      .then(([items, configs]) => {
+        const projects = buildingProjectsByCompany(configs);
+        if (active) setClients(items.map((client) => ({
+          ...client,
+          building_name: projects.get(buildingCompanyKey(client.project)) || client.project,
+        })));
       })
       .catch((requestError) => {
         if (active && requestError.message !== 'Unauthorized') setError(requestError.message);
@@ -39,7 +51,11 @@ export default function BuildingStatementModal({ onClose }) {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail?.message || body.detail || 'No se pudo consultar el estado de cuenta.');
       setSapInfo(body);
-      await downloadBuildingStatement(body);
+      await downloadBuildingStatement({
+        ...body,
+        issuer: { ...body.issuer, company: client.project },
+        customer: { ...body.customer, project: client.building_name },
+      });
     } catch (requestError) {
       if (requestError.message !== 'Unauthorized') setError(requestError.message);
     } finally {
@@ -70,7 +86,7 @@ export default function BuildingStatementModal({ onClose }) {
                 return <div key={key} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900">{client.customer_name}</p>
-                    <p className="text-sm text-gray-600">{client.customer_code} · {client.project} · {client.units.join(', ') || 'Sin unidad'}</p>
+                    <p className="text-sm text-gray-600">{client.customer_code} · {client.project} · {client.building_name} · {client.units.join(', ') || 'Sin unidad'}</p>
                   </div>
                   <button type="button" disabled={Boolean(generating)} onClick={() => generate(client)} className="inline-flex items-center gap-2 rounded-lg bg-[#053E68] px-3 py-2 text-sm font-medium text-white hover:bg-[#06497c] disabled:opacity-50">
                     {generating === key ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}

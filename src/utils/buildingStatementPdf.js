@@ -18,7 +18,7 @@ export async function buildBuildingStatementPdf(statement) {
   const right = pageWidth - margin;
   let y = 18;
 
-  const header = () => {
+  const header = (unit, contractNumber) => {
     doc.setTextColor(15, 35, 52);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
@@ -36,18 +36,18 @@ export async function buildBuildingStatementPdf(statement) {
     doc.setDrawColor(100, 113, 127);
     doc.rect(margin, 52, pageWidth - margin * 2, 27);
     doc.text(`Código cliente: ${customer.code}`, margin + 3, 59);
-    doc.text(`No. contrato: ${customer.contract_number || 'No disponible en SAP'}`, 115, 59);
+    doc.text(`No. contrato: ${contractNumber || 'No disponible en SAP'}`, 115, 59);
     const name = doc.splitTextToSize(`Nombre cliente: ${customer.name}`, 95);
     doc.text(name.slice(0, 2), margin + 3, 67);
-    doc.text(`No. apartamento: ${customer.units.join(', ') || '—'}`, 115, 67);
+    doc.text(`No. apartamento: ${unit}`, 115, 67);
     doc.text(`Proyecto: ${customer.project}`, margin + 3, 76);
     y = 84;
   };
 
   const columns = [
-    ['Unidad', 14], ['No. cuota', 27], ['Fecha pactada', 47],
-    ['Monto cuota', 73], ['Fecha pago', 101], ['Monto pagado', 125],
-    ['Saldo', 153], ['No. recibo', 174],
+    ['No. cuota', 14], ['Fecha pactada', 38], ['Monto cuota', 67],
+    ['Fecha pago', 96], ['Monto pagado', 124], ['Saldo', 154],
+    ['No. recibo', 176],
   ];
   const tableHeader = () => {
     doc.setFillColor(5, 62, 104);
@@ -61,46 +61,74 @@ export async function buildBuildingStatementPdf(statement) {
     y += 9;
   };
 
-  header();
-  tableHeader();
-  for (let index = 0; index < statement.installments.length; index += 1) {
-    const row = statement.installments[index];
-    if (y > 268) {
-      doc.addPage();
-      y = 18;
-      tableHeader();
-    }
-    if (index % 2 === 0) {
-      doc.setFillColor(245, 248, 250);
-      doc.rect(margin, y, pageWidth - margin * 2, 8, 'F');
-    }
-    const values = [row.unit, row.installment_number ?? '—', dateText(row.due_date),
-      money(row.installment_amount), dateText(row.payment_date), money(row.amount_paid),
-      money(row.balance), row.receipt_number || '—'];
-    doc.setFontSize(7);
-    values.forEach((value, column) => {
-      const nextX = columns[column + 1]?.[1] || right;
-      const maxWidth = Math.max(8, nextX - columns[column][1] - 2);
-      const text = doc.splitTextToSize(String(value), maxWidth)[0] || '—';
-      doc.text(text, columns[column][1] + 1, y + 5.2);
-    });
-    y += 8;
+  const byUnit = new Map();
+  for (const row of statement.installments) {
+    const unit = String(row.unit || 'Sin unidad');
+    if (!byUnit.has(unit)) byUnit.set(unit, []);
+    byUnit.get(unit).push(row);
   }
-  if (y > 257) { doc.addPage(); y = 18; }
-  doc.setDrawColor(80, 95, 110);
-  doc.line(margin, y + 2, right, y + 2);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text(`Saldo total (USD): $${money(statement.total_balance)}`, right, y + 9, { align: 'right' });
-  y += 17;
-  const missing = [];
-  if (!statement.sap_fields.receipt_number) missing.push('No. recibo');
-  if (!statement.sap_fields.payment_date) missing.push('Fecha pago');
-  if (!statement.sap_fields.contract_number) missing.push('No. contrato');
-  if (missing.length) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`Campos no disponibles en la consulta SAP: ${missing.join(', ')}.`, margin, y);
+  for (const [unitIndex, [unit, rows]] of [...byUnit].entries()) {
+    if (unitIndex) doc.addPage();
+    const contractNumber = rows.find((row) => row.contract_number)?.contract_number
+      || (byUnit.size === 1 ? customer.contract_number : null);
+    header(unit, contractNumber);
+    tableHeader();
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const values = [row.installment_number ?? '—', dateText(row.due_date),
+        money(row.installment_amount), dateText(row.payment_date), money(row.amount_paid),
+        money(row.balance)];
+      doc.setFontSize(7);
+      const receipts = String(row.receipt_number || '').split(',').map((value) => value.trim()).filter(Boolean);
+      const receiptLines = (receipts.length ? receipts : ['—']).flatMap((value) =>
+        doc.splitTextToSize(value, right - columns[6][1] - 2));
+      let remaining = receiptLines;
+      let firstPart = true;
+      while (remaining.length) {
+        if (y > 268) {
+          doc.addPage();
+          header(unit, contractNumber);
+          tableHeader();
+        }
+        const lineCount = Math.min(remaining.length, Math.max(1, Math.floor((276 - y - 4) / 3.2)));
+        const part = remaining.slice(0, lineCount);
+        remaining = remaining.slice(lineCount);
+        const height = Math.max(8, 4 + part.length * 3.2);
+        if (index % 2 === 0) {
+          doc.setFillColor(245, 248, 250);
+          doc.rect(margin, y, pageWidth - margin * 2, height, 'F');
+        }
+        doc.setFontSize(7);
+        if (firstPart) values.forEach((value, column) => {
+          const maxWidth = columns[column + 1][1] - columns[column][1] - 2;
+          const line = doc.splitTextToSize(String(value), maxWidth)[0] || '—';
+          doc.text(line, columns[column][1] + 1, y + 5.2);
+        });
+        part.forEach((line, lineIndex) => doc.text(line, columns[6][1] + 1, y + 5.2 + lineIndex * 3.2));
+        y += height;
+        firstPart = false;
+      }
+    }
+    if (y > 257) {
+      doc.addPage();
+      header(unit, contractNumber);
+    }
+    const unitBalance = rows.reduce((total, row) => total + Math.round(Number(row.balance || 0) * 100), 0) / 100;
+    doc.setDrawColor(80, 95, 110);
+    doc.line(margin, y + 2, right, y + 2);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`Saldo unidad (USD): $${money(unitBalance)}`, right, y + 9, { align: 'right' });
+    y += 17;
+    const missing = [];
+    if (!statement.sap_fields.receipt_number) missing.push('No. recibo');
+    if (!statement.sap_fields.payment_date) missing.push('Fecha pago');
+    if (!statement.sap_fields.contract_number) missing.push('No. contrato');
+    if (missing.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`Campos no disponibles en la consulta SAP: ${missing.join(', ')}.`, margin, y);
+    }
   }
   return doc;
 }
