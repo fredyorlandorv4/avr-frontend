@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles, FlaskConical, WalletCards, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
+import { Activity, Phone, BarChart3, Target, Clock, Users, Settings, LogOut, Briefcase, FileText, Sparkles, FlaskConical, WalletCards, ChevronDown, ChevronRight, MessageSquare, CalendarClock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const ADMIN_ONLY = new Set(['prompts', 'agent-call-tests', 'users']);
@@ -26,10 +26,10 @@ export default function Sidebar({ sidebarOpen, onClose }) {
 
   const { logout, isAdmin, username, role, areaName, isSystem, sapSources } = useAuth();
   const { pathname } = useLocation();
-  const [settingsOpen, setSettingsOpen] = useState(() => pathname === '/settings' || pathname === '/settings/messaging');
+  const [settingsOpen, setSettingsOpen] = useState(() => pathname === '/settings' || pathname.startsWith('/settings/'));
 
   useEffect(() => {
-    if (pathname === '/settings' || pathname === '/settings/messaging') setSettingsOpen(true);
+    if (pathname === '/settings' || pathname.startsWith('/settings/')) setSettingsOpen(true);
   }, [pathname]);
 
   const capitalizeFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -110,7 +110,7 @@ export default function Sidebar({ sidebarOpen, onClose }) {
                 type="button"
                 onClick={() => setSettingsOpen(open => !open)}
                 className={`group w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
-                  pathname === '/settings' || pathname === '/settings/messaging'
+                  pathname === '/settings' || pathname.startsWith('/settings/')
                     ? 'bg-white/10 text-white'
                     : 'text-blue-100 hover:bg-white/10 hover:text-white'
                 }`}
@@ -139,6 +139,14 @@ export default function Sidebar({ sidebarOpen, onClose }) {
                   >
                     <MessageSquare className="w-4 h-4" />
                     Mensajería
+                  </NavLink>
+                  <NavLink
+                    to="/settings/automation"
+                    onClick={onClose}
+                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-[#F4CD04] text-[#053E68] font-semibold' : 'text-blue-100 hover:bg-white/10 hover:text-white'}`}
+                  >
+                    <CalendarClock className="w-4 h-4" />
+                    Automatización
                   </NavLink>
                 </div>
               )}

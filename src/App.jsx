@@ -27,6 +27,7 @@ import SettingsView from './components/SettingsView.jsx';
 import AgentCallTestsView from './components/AgentCallTestsView.jsx';
 import OverduePortfolioView from './components/OverduePortfolioView.jsx';
 import MessagingView from './components/MessagingView.jsx';
+import AutomationView from './components/AutomationView.jsx';
 import MessagingQueueView from './components/MessagingQueueView.jsx';
 
 const PATH_LABELS = {
@@ -45,6 +46,7 @@ const PATH_LABELS = {
   '/settings':      'Configuración',
   '/messaging':     'Mensajería',
   '/settings/messaging': 'Configuración de Mensajería',
+  '/settings/automation': 'Automatización',
   '/agent-call-tests': 'Pruebas de Agentes',
 };
 
@@ -661,6 +663,10 @@ function AppShell({ darkMode, onToggleDarkMode }) {
 
           <Route path="/settings/messaging" element={
             isAdmin ? <MessagingView /> : <Navigate to="/dashboard" replace />
+          } />
+
+          <Route path="/settings/automation" element={
+            isAdmin ? <AutomationView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="/agent-call-tests" element={
