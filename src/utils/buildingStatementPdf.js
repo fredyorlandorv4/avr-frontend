@@ -5,7 +5,7 @@ function dateText(value) {
 }
 
 function money(value) {
-  return Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `$${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export async function buildBuildingStatementPdf(statement) {
@@ -51,8 +51,8 @@ export async function buildBuildingStatementPdf(statement) {
   };
 
   const columns = [
-    ['No. cuota', 14], ['Fecha pactada', 38], ['Monto cuota', 67],
-    ['Fecha pago', 96], ['Monto pagado', 124], ['Saldo', 154],
+    ['No. cuota', 14], ['Fecha pactada', 38], ['Monto cuota ($)', 67],
+    ['Fecha pago', 96], ['Monto pagado ($)', 124], ['Saldo ($)', 154],
     ['No. recibo', 176],
   ];
   const tableHeader = () => {
@@ -65,6 +65,16 @@ export async function buildBuildingStatementPdf(statement) {
     doc.setTextColor(25, 39, 52);
     doc.setFont('helvetica', 'normal');
     y += 9;
+  };
+
+  const drawAmount = (value, column, baseline) => {
+    const width = columns[column + 1][1] - columns[column][1] - 2;
+    doc.setFontSize(7);
+    const text = money(value);
+    const textWidth = doc.getTextWidth(text);
+    if (textWidth > width) doc.setFontSize(7 * width / textWidth);
+    doc.text(text, columns[column][1] + 1, baseline);
+    doc.setFontSize(7);
   };
 
   const byUnit = new Map();
@@ -82,8 +92,7 @@ export async function buildBuildingStatementPdf(statement) {
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index];
       const values = [row.installment_number ?? '—', dateText(row.due_date),
-        money(row.installment_amount), dateText(row.payment_date), money(row.amount_paid),
-        money(row.balance)];
+        row.installment_amount, dateText(row.payment_date), row.amount_paid, row.balance];
       doc.setFontSize(7);
       const receipts = String(row.receipt_number || '').split(',').map((value) => value.trim()).filter(Boolean);
       const receiptLines = (receipts.length ? receipts : ['—']).flatMap((value) =>
@@ -106,6 +115,10 @@ export async function buildBuildingStatementPdf(statement) {
         }
         doc.setFontSize(7);
         if (firstPart) values.forEach((value, column) => {
+          if ([2, 4, 5].includes(column)) {
+            drawAmount(value, column, y + 5.2);
+            return;
+          }
           const maxWidth = columns[column + 1][1] - columns[column][1] - 2;
           const line = doc.splitTextToSize(String(value), maxWidth)[0] || '—';
           doc.text(line, columns[column][1] + 1, y + 5.2);
@@ -125,9 +138,9 @@ export async function buildBuildingStatementPdf(statement) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.text('Total (USD)', columns[0][1] + 1, y + 8);
-    doc.text(money(sum('installment_amount')), columns[2][1] + 1, y + 8);
-    doc.text(money(sum('amount_paid')), columns[4][1] + 1, y + 8);
-    doc.text(money(sum('balance')), columns[5][1] + 1, y + 8);
+    drawAmount(sum('installment_amount'), 2, y + 8);
+    drawAmount(sum('amount_paid'), 4, y + 8);
+    drawAmount(sum('balance'), 5, y + 8);
     y += 17;
     const missing = [];
     if (!statement.sap_fields.receipt_number) missing.push('No. recibo');

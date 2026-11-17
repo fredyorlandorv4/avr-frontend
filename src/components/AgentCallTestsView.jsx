@@ -910,19 +910,6 @@ export default function AgentCallTestsView() {
     };
   }, [activeCall?.status_url, activeCall?.polling, authToken, logout]);
 
-  useEffect(() => {
-    const handleCarmenStatusClick = (event) => {
-      const card = event.target.closest("article");
-      if (
-        card?.textContent?.toLowerCase().includes("carmen") &&
-        event.target.closest("span")?.textContent?.trim() === "Activo"
-      )
-        setCarmenFlipped(true);
-    };
-    document.addEventListener("click", handleCarmenStatusClick);
-    return () => document.removeEventListener("click", handleCarmenStatusClick);
-  }, []);
-
   const openTest = (agent) => {
     if (activeCall?.polling) return;
     setTest(agent);
@@ -1115,11 +1102,24 @@ export default function AgentCallTestsView() {
                     {agent.area || "—"} · {agent.subarea || "Sin subárea"}
                   </p>
                 </div>
-                <span
-                  className={`inline-flex self-start shrink-0 items-center justify-center px-3 py-1 rounded-full text-xs leading-4 font-medium ${agent.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}
-                >
-                  {agent.active ? "Activo" : "Inactivo"}
-                </span>
+                <div className="flex shrink-0 items-start gap-2">
+                  {String(agent.agent_name || "").toLowerCase().includes("carmen") && (
+                    <button
+                      type="button"
+                      onClick={() => setCarmenFlipped(true)}
+                      aria-label="Abrir prueba de mensajería de Carmen"
+                      title="Prueba de mensajería"
+                      className="!p-1.5 rounded-full text-[#053E68] hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B5A8E]"
+                    >
+                      <MessageCircle className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  )}
+                  <span
+                    className={`inline-flex self-start shrink-0 items-center justify-center px-3 py-1 rounded-full text-xs leading-4 font-medium ${agent.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                  >
+                    {agent.active ? "Activo" : "Inactivo"}
+                  </span>
+                </div>
               </div>
               <div className="text-sm text-gray-600 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <p>

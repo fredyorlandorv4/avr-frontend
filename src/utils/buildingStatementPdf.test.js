@@ -76,8 +76,8 @@ test('imprime el logo y los totales de cuotas, pagos y saldo por unidad', async 
   });
   const first = pdf.internal.pages[1].join('');
   const second = pdf.internal.pages[2].join('');
-  for (const total of ['300.00', '50.00', '250.00']) assert.ok(first.includes(total));
-  for (const total of ['500.00', '40.00', '460.00']) assert.ok(second.includes(total));
+  for (const amount of ['$100.00', '$20.00', '$80.00', '$200.00', '$30.00', '$170.00', '$300.00', '$50.00', '$250.00']) assert.ok(first.includes(amount));
+  for (const total of ['$500.00', '$40.00', '$460.00']) assert.ok(second.includes(total));
   assert.match(first, /\/I\d+ Do/);
   assert.match(second, /\/I\d+ Do/);
 });
