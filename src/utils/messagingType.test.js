@@ -2,6 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { messagingType, matchesMessagingType } from "./messagingType.js";
 
+test("identifica estados de cuenta como su propio tipo de mensaje", () => {
+  const type = messagingType({ message_type: "statement", due_date: "2026-11-17" }, "2026-11-17");
+  assert.equal(type, "statement");
+  assert.equal(matchesMessagingType(type, "statement"), true);
+  assert.equal(matchesMessagingType(type, "reminder"), false);
+});
+
 test("clasifica según el día del lote y no el día en que se consulta", () => {
   assert.equal(messagingType({ due_date: "2026-10-28" }, "2026-10-29"), "collection");
   assert.equal(messagingType({ due_date: "2026-10-29" }, "2026-10-29"), "reminder");

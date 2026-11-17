@@ -89,12 +89,14 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
   const { authToken, logout } = useAuth();
   const [imageSource, setImageSource] = useState("");
   const [imageError, setImageError] = useState("");
+  const isDocument = delivery.message_type === 'statement';
+  const attachmentUrl = isDocument ? delivery.document_url : imageUrl;
 
   useEffect(() => {
-    if (!imageUrl) return undefined;
+    if (!attachmentUrl) return undefined;
     let active = true;
     let objectUrl;
-    apiFetch(imageUrl, { token: authToken, onUnauthorized: logout })
+    apiFetch(attachmentUrl, { token: authToken, onUnauthorized: logout })
       .then(async (response) => {
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
@@ -111,7 +113,7 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [imageUrl, authToken, logout]);
+  }, [attachmentUrl, authToken, logout]);
 
   useEffect(() => {
     const closeOnEscape = (event) => {
@@ -157,7 +159,11 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
         </header>
         <div className="grid gap-5 overflow-y-auto p-6 md:grid-cols-[220px_1fr]">
           <div>
-            {imageSource ? (
+            {isDocument ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                {imageSource ? <a href={imageSource} download={delivery.document_filename || 'Estado_Cuenta.pdf'} className="font-semibold underline">Descargar estado de cuenta PDF</a> : imageError || (attachmentUrl ? 'Cargando PDF…' : 'El PDF todavía no se ha generado.')}
+              </div>
+            ) : imageSource ? (
               <img
                 src={imageSource}
                 alt={delivery.image_is_snapshot ? "Imagen adjunta a este envío" : "Imagen de la configuración actual"}
@@ -178,7 +184,7 @@ function MessageDetail({ delivery, imageUrl, onClose }) {
               {delivery.sent_at && <p>Fecha de envío: {new Date(delivery.sent_at).toLocaleString("es-GT", { timeZone: "America/Guatemala" })}</p>}
               {delivery.status === "accepted" && <p className="text-xs text-slate-500">Evolution aceptó el envío. No hay confirmación de entrega o lectura registrada.</p>}
               {delivery.error_message && <p className="text-red-700">Error: {delivery.error_message}</p>}
-              {!delivery.image_is_snapshot && imageSource && <p className="text-xs text-slate-500">Imagen de la configuración actual. Este histórico no conserva una copia de la imagen enviada.</p>}
+              {!isDocument && !delivery.image_is_snapshot && imageSource && <p className="text-xs text-slate-500">Imagen de la configuración actual. Este histórico no conserva una copia de la imagen enviada.</p>}
             </div>
             <h3 className="mb-2 text-sm font-semibold text-slate-700">
               Mensaje completo
@@ -316,7 +322,7 @@ export default function MessagingQueueView() {
       ),
     [projects],
   );
-  const imageUrl = selected
+  const imageUrl = selected && selected.message_type !== 'statement'
     ? selected.image_url ||
       (selected.project_config_id ? `/api/v1/cobros/reminders/projects/${selected.project_config_id}/image` : null) ||
       imagesByProject.get(keyOf(selected.empresa, selected.proyecto)) ||
@@ -473,6 +479,7 @@ export default function MessagingQueueView() {
                 <option value="all">Todos</option>
                 <option value="collection">Cobros</option>
                 <option value="reminder">Recordatorios</option>
+                <option value="statement">Estados de cuenta</option>
               </select>
             </label>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">

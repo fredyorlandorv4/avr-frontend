@@ -15,7 +15,7 @@ export function messageStatus(delivery) {
   return { key: status || 'unknown', label: status || '—', className: 'bg-slate-100 text-slate-700' };
 }
 
-export const messageTypeLabel = type => ({ collection: 'Cobro', reminder: 'Recordatorio', combined: 'Cobro y recordatorio', unknown: 'Sin identificar' }[type] || 'Sin identificar');
+export const messageTypeLabel = type => ({ statement: 'Estado de cuenta', collection: 'Cobro', reminder: 'Recordatorio', combined: 'Cobro y recordatorio', unknown: 'Sin identificar' }[type] || 'Sin identificar');
 const normalized = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
 const collator = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
 const columnValue = (delivery, key) => ({

@@ -180,7 +180,7 @@ export default function CampaignContactsView({ campaign, contacts, calls, loadin
                 <table className="w-full min-w-[980px]">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      {['Lote', 'Cliente', 'Teléfono', 'Estado', 'Total', 'Llamada', ''].map(h => (
+                      {['Lote', 'Cliente', 'Teléfono', 'Estado', 'Total', 'Llamada', 'Acciones'].map(h => (
                         <th key={h} className="text-left py-3 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>

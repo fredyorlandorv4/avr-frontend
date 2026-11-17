@@ -1,4 +1,5 @@
 export function messagingType(delivery, runDate) {
+  if (delivery.message_type === 'statement') return 'statement';
   const text = String(delivery.message || "").toLocaleLowerCase("es");
   if (text.includes("además, le recordamos sus próximas cuotas:")) return "combined";
 
