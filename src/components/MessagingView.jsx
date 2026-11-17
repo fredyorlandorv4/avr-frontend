@@ -543,10 +543,10 @@ export default function MessagingView() {
         <form
           ref={projectFormRef}
           onSubmit={saveProject}
-          className="m-5 grid gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 lg:grid-cols-12"
+          className="messaging-project-form m-5 grid gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 lg:grid-cols-12"
         >
           {editingProject && (
-            <div className="lg:col-span-12 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-[#053E68]">
+            <div className="messaging-edit-notice lg:col-span-12 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-[#053E68]">
               Editando <b>{valueOf(editingProject, ["company_name"])} / {valueOf(editingProject, ["project_name"])}</b>. Puedes conservar la imagen actual o cargar una nueva.
             </div>
           )}

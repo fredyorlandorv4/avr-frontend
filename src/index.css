@@ -86,3 +86,17 @@ button {
   color: #edf3f7 !important;
   border-color: #465a6c !important;
 }
+
+.dark .messaging-project-form {
+  background-color: #202c38;
+}
+
+.dark .messaging-edit-notice {
+  background-color: #18364a;
+  border-color: #376782;
+  color: #d7eaf6 !important;
+}
+
+.dark .messaging-project-form input[type="file"]::file-selector-button {
+  color: #d7eaf6;
+}

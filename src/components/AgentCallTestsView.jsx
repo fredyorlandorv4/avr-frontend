@@ -1116,7 +1116,7 @@ export default function AgentCallTestsView() {
                   </p>
                 </div>
                 <span
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${agent.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                  className={`inline-flex self-start shrink-0 items-center justify-center px-3 py-1 rounded-full text-xs leading-4 font-medium ${agent.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}
                 >
                   {agent.active ? "Activo" : "Inactivo"}
                 </span>
@@ -1127,9 +1127,6 @@ export default function AgentCallTestsView() {
                   {agent.voice_provider === "openai_live"
                     ? "OpenAI GPT-Live"
                     : "ElevenLabs"}
-                </p>
-                <p>
-                  <b>Modelo:</b> {agent.voice_model || "—"}
                 </p>
                 <p>
                   <b>DID:</b> {agent.did || "—"}
