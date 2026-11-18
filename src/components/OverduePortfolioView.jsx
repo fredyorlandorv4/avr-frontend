@@ -234,14 +234,28 @@ export default function OverduePortfolioView() {
     setAllClients([]);
     if (!preserveSelection) setSelectedClientIds(new Set());
     try {
-      const buildingProjectsPromise = canViewBuildings
-        ? apiFetch("/api/v1/cobros/reminders/projects", { token: authToken, onUnauthorized: logout })
-            .then(response => response.ok ? response.json() : [])
-            .then(configs => buildingProjectsByCompany(configs))
-            .catch(() => new Map())
-        : Promise.resolve(new Map());
       const sources = allowedSourcesKey.split('|').filter(Boolean);
       const clientsBySource = new Map();
+      let buildingProjects = new Map();
+      if (canViewBuildings) {
+        apiFetch("/api/v1/cobros/reminders/projects", { token: authToken, onUnauthorized: logout })
+          .then(response => response.ok ? response.json() : [])
+          .then(configs => {
+            if (sequence !== loadSequence.current) return;
+            buildingProjects = buildingProjectsByCompany(configs);
+            const buildingClients = clientsBySource.get('edificios');
+            if (!buildingClients) return;
+            clientsBySource.set('edificios', buildingClients.map(client => ({
+              ...client,
+              lots: client.lots.map(lot => ({
+                ...lot,
+                project: buildingProjects.get(buildingCompanyKey(lot.sapProject)) || lot.sapProject,
+              })),
+            })));
+            setAllClients(sources.flatMap(source => clientsBySource.get(source) || []));
+          })
+          .catch(() => {});
+      }
       const errors = [];
       setExpandedClients(new Set());
       setExpandedLots(new Set());
@@ -256,8 +270,6 @@ export default function OverduePortfolioView() {
             throw new Error(messageFor(response, typeof body.detail === "string" ? body.detail : ""));
           }
           const payload = await response.json();
-          if (sequence !== loadSequence.current) return;
-          const buildingProjects = source === 'edificios' ? await buildingProjectsPromise : new Map();
           if (sequence !== loadSequence.current) return;
           clientsBySource.set(source, normalizeClients(payload, buildingProjects).filter(client => client.source === source));
           setAllClients(sources.flatMap(item => clientsBySource.get(item) || []));
