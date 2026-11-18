@@ -234,48 +234,45 @@ export default function OverduePortfolioView() {
     setAllClients([]);
     if (!preserveSelection) setSelectedClientIds(new Set());
     try {
-      const response = await apiFetch('/api/v1/cobros/cartera-vencida?tipo=todo', {
-        token: authToken,
-        onUnauthorized: logout,
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(
-          messageFor(
-            response,
-            typeof body.detail === "string" ? body.detail : "",
-          ),
-        );
-      }
-      const payload = await response.json();
-      if (sequence !== loadSequence.current) return;
-      const buildingProjects = new Map();
-      if (canViewBuildings) {
+      const buildingProjectsPromise = canViewBuildings
+        ? apiFetch("/api/v1/cobros/reminders/projects", { token: authToken, onUnauthorized: logout })
+            .then(response => response.ok ? response.json() : [])
+            .then(configs => buildingProjectsByCompany(configs))
+            .catch(() => new Map())
+        : Promise.resolve(new Map());
+      const sources = allowedSourcesKey.split('|').filter(Boolean);
+      const clientsBySource = new Map();
+      const errors = [];
+      setExpandedClients(new Set());
+      setExpandedLots(new Set());
+      await Promise.all(sources.map(async source => {
         try {
-          const projectsResponse = await apiFetch("/api/v1/cobros/reminders/projects", {
+          const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${source}`, {
             token: authToken,
             onUnauthorized: logout,
           });
-          if (projectsResponse.ok) {
-            const configs = await projectsResponse.json();
-            buildingProjectsByCompany(configs).forEach((project, company) => {
-              buildingProjects.set(company, project);
-            });
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(messageFor(response, typeof body.detail === "string" ? body.detail : ""));
           }
-        } catch {
-          // La cartera SAP sigue visible si la configuración no está disponible.
+          const payload = await response.json();
+          if (sequence !== loadSequence.current) return;
+          const buildingProjects = source === 'edificios' ? await buildingProjectsPromise : new Map();
+          if (sequence !== loadSequence.current) return;
+          clientsBySource.set(source, normalizeClients(payload, buildingProjects).filter(client => client.source === source));
+          setAllClients(sources.flatMap(item => clientsBySource.get(item) || []));
+        } catch (loadError) {
+          if (loadError.message !== 'Unauthorized') errors.push(`${source}: ${loadError.message || 'No se pudo cargar la cartera.'}`);
+          if (sequence === loadSequence.current) setError(errors.join(' '));
         }
-      }
+      }));
       if (sequence !== loadSequence.current) return;
-      const refreshedClients = normalizeClients(payload, buildingProjects).filter(client => allowedSourcesKey.split('|').includes(client.source));
+      const refreshedClients = sources.flatMap(source => clientsBySource.get(source) || []);
       const availableClientIds = new Set(refreshedClients.map((client) => client.id));
       const retainedClientIds = new Set(
         [...previousSelectedIds].filter((id) => availableClientIds.has(id)),
       );
-      setAllClients(refreshedClients);
-      setExpandedClients(new Set());
-      setExpandedLots(new Set());
-      setSelectedClientIds(retainedClientIds);
+      setSelectedClientIds(current => new Set([...current].filter(id => availableClientIds.has(id))));
       return {
         clients: refreshedClients,
         selectedClientIds: retainedClientIds,
@@ -783,7 +780,7 @@ export default function OverduePortfolioView() {
         </div>
       </section>
 
-      {loading ? (
+      {loading && allClients.length === 0 ? (
         <section className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400">
           Cargando cartera vencida...
         </section>
