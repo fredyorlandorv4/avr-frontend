@@ -261,7 +261,7 @@ export default function OverduePortfolioView() {
       setExpandedLots(new Set());
       await Promise.all(sources.map(async source => {
         try {
-          const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${source}`, {
+          const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${source}&incluir_metricas=false`, {
             token: authToken,
             onUnauthorized: logout,
           });
