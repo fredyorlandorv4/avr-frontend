@@ -1243,7 +1243,6 @@ export default function OverduePortfolioView() {
                     <input type="checkbox" checked={lotTyping} onChange={(event) => setLotTyping(event.target.checked)} />
                     Typing
                   </label>
-                  <p className="text-xs text-slate-500">Con 100 mensajes o más, la cola se divide en cuatro tandas. Hay al menos 15 minutos entre el inicio de cada tanda.</p>
                 </fieldset>
               )}
               {messageSelection.skipped > 0 && (
