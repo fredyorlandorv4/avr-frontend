@@ -210,7 +210,7 @@ export default function OverduePortfolioView() {
   const [messageSelection, setMessageSelection] = useState(null);
   const [lotWaitEnabled, setLotWaitEnabled] = useState(false);
   const [lotWaitMinutes, setLotWaitMinutes] = useState(0);
-  const [lotTyping, setLotTyping] = useState(false);
+  const [lotTyping, setLotTyping] = useState(true);
   const [sendingMessages, setSendingMessages] = useState(false);
   const [queueingLots, setQueueingLots] = useState(false);
   const [preparingMessages, setPreparingMessages] = useState(false);
