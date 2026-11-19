@@ -208,7 +208,11 @@ export default function OverduePortfolioView() {
   const [creating, setCreating] = useState(false);
   const [campaignError, setCampaignError] = useState("");
   const [messageSelection, setMessageSelection] = useState(null);
+  const [lotWaitEnabled, setLotWaitEnabled] = useState(false);
+  const [lotWaitMinutes, setLotWaitMinutes] = useState(0);
+  const [lotTyping, setLotTyping] = useState(false);
   const [sendingMessages, setSendingMessages] = useState(false);
+  const [queueingLots, setQueueingLots] = useState(false);
   const [preparingMessages, setPreparingMessages] = useState(false);
   const [messageError, setMessageError] = useState("");
   const [messageSuccess, setMessageSuccess] = useState("");
@@ -633,12 +637,32 @@ export default function OverduePortfolioView() {
 
   const sendSelectedMessages = async () => {
     if (!messageSelection?.groups?.length || sendingMessages) return;
+    const submittedIds = selectedClientIds;
+    const lotGroups = messageSelection.groups.filter((group) => group.body.tipo_cartera === "lotes");
+    const hasLots = lotGroups.length > 0;
+    const groups = hasLots ? [
+      {
+        count: lotGroups.reduce((total, group) => total + group.count, 0),
+        body: {
+          tipo_cartera: "lotes",
+          lot_groups: lotGroups.map(({ body }) => body.collection_selections
+            ? { collection_selections: body.collection_selections }
+            : { due_date: body.due_date, delivery_keys: body.delivery_keys }),
+          lot_send_options: { wait_minutes: lotWaitEnabled ? lotWaitMinutes : 0, typing: lotTyping },
+        },
+      },
+      ...messageSelection.groups.filter((group) => group.body.tipo_cartera === "edificios"),
+    ] : messageSelection.groups;
     setSendingMessages(true);
+    if (hasLots) {
+      setQueueingLots(true);
+      setMessageSelection(null);
+    }
     setMessageError("");
     let queuedCount = 0;
     const skippedRecipients = new Set();
     try {
-      for (const group of messageSelection.groups) {
+      for (const group of groups) {
         const response = await apiFetch("/api/v1/cobros/reminders/send", {
           method: "POST",
           token: authToken,
@@ -650,6 +674,9 @@ export default function OverduePortfolioView() {
           const detail = payload.detail;
           const code = typeof detail === "object" ? detail?.code : detail;
           if (code === "collection_candidates_changed" || code === "reminder_candidates_changed") {
+            if (hasLots && !queuedCount) {
+              throw new Error("La cartera cambió. Actualiza la consulta SAP y vuelve a seleccionar los mensajes.");
+            }
             if (!queuedCount) {
               const refreshed = await load(selectedClientIds);
               setMessageSelection(null);
@@ -676,16 +703,20 @@ export default function OverduePortfolioView() {
         `${queuedCount ? `${queuedCount} selección${queuedCount === 1 ? "" : "es"} encolada${queuedCount === 1 ? "" : "s"} para envío.` : "No había selecciones nuevas para encolar."}${skippedRecipients.size ? ` No se reenviará a ${[...skippedRecipients].join(", ")} porque ya tiene un envío en curso o aceptado.` : ""}`,
       );
       setMessageSelection(null);
-      setSelectedClientIds(new Set());
+      setSelectedClientIds((current) => !hasLots || current === submittedIds ? new Set() : current);
     } catch (requestError) {
       if (requestError.message !== "Unauthorized")
         setMessageError(
           `${queuedCount ? `${queuedCount} selección(es) ya encolada(s). ` : ""}${skippedRecipients.size ? `Omitidos por envío previo o en curso: ${[...skippedRecipients].join(", ")}. ` : ""}${requestError.message || "No se pudieron encolar los mensajes."}`,
         );
     } finally {
+      setQueueingLots(false);
       setSendingMessages(false);
     }
   };
+
+  const hasLotMessages = messageSelection?.groups.some((group) => group.body.tipo_cartera === "lotes");
+  const blockingSend = sendingMessages && !queueingLots;
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-5">
@@ -702,7 +733,7 @@ export default function OverduePortfolioView() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => load(selectedClientIds)}
-              disabled={loading || sendingMessages}
+              disabled={loading || blockingSend}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               <RefreshCw
@@ -713,7 +744,7 @@ export default function OverduePortfolioView() {
             <button
               onClick={openCampaignForm}
               disabled={
-                loading || selectedClientIds.size === 0 || sendingMessages
+                loading || selectedClientIds.size === 0 || blockingSend
               }
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#053E68] text-white text-sm font-medium hover:bg-[#06497c] disabled:opacity-50"
             >
@@ -744,13 +775,19 @@ export default function OverduePortfolioView() {
             {messageError}
           </p>
         )}
+        {queueingLots && (
+          <p role="status" className="mt-4 flex items-center gap-2 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <RefreshCw aria-hidden="true" className="h-4 w-4 animate-spin" />
+            Encolando mensajes. Puedes seguir usando la consulta SAP.
+          </p>
+        )}
         {messageSuccess && (
           <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             {messageSuccess}
           </p>
         )}
         <div className="mt-5 grid gap-3 lg:grid-cols-4">
-          <label className="text-sm font-medium text-gray-700">Cartera<select value={portfolioFilter} onChange={event => { setPortfolioFilter(event.target.value); setSelectedClientIds(new Set()); setProjectFilter(''); }} disabled={loading || sendingMessages} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-[#053E68]"><option value="todo">Todo</option>{sapSources.includes('lotes') && <option value="lotes">Lotes</option>}{sapSources.includes('edificios') && <option value="edificios">Edificios</option>}</select></label>
+          <label className="text-sm font-medium text-gray-700">Cartera<select value={portfolioFilter} onChange={event => { setPortfolioFilter(event.target.value); setSelectedClientIds(new Set()); setProjectFilter(''); }} disabled={loading || blockingSend} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-[#053E68]"><option value="todo">Todo</option>{sapSources.includes('lotes') && <option value="lotes">Lotes</option>}{sapSources.includes('edificios') && <option value="edificios">Edificios</option>}</select></label>
           <label className="text-sm font-medium text-gray-700">
             Buscar cliente o número
             <input
@@ -1153,7 +1190,7 @@ export default function OverduePortfolioView() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="send-message-title"
-            className="w-full max-w-md rounded-xl bg-white shadow-xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col rounded-xl bg-white shadow-xl"
           >
             <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4">
               <div>
@@ -1176,7 +1213,7 @@ export default function OverduePortfolioView() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-2 p-6 text-sm text-slate-600">
+            <div className="min-h-0 space-y-2 overflow-y-auto p-6 text-sm text-slate-600">
               <p>
                 <b className="text-slate-800">
                   {messageSelection.groups.reduce((total, group) => total + group.count, 0)}
@@ -1186,6 +1223,29 @@ export default function OverduePortfolioView() {
               {messageSelection.groups.map((group, index) => (
                 <p key={`${group.type}-${index}`}>{group.count} de {group.type.toLowerCase()}{group.count === 1 ? "" : "s"} · {group.body.tipo_cartera === "edificios" ? "Edificios" : "Lotes"}{group.body.due_date ? ` (vencen ${group.body.due_date})` : ""}</p>
               ))}
+              {hasLotMessages && (
+                <fieldset className="space-y-3 rounded-lg border border-slate-200 px-3 pb-3 pt-2">
+                  <legend className="px-1 font-semibold text-slate-800">Opciones de envío para Lotes</legend>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={lotWaitEnabled} onChange={(event) => setLotWaitEnabled(event.target.checked)} />
+                    Tiempo de espera entre mensajes
+                  </label>
+                  <label className="block">
+                    <span className="sr-only">Minutos de espera entre mensajes</span>
+                    <span aria-hidden="true">{lotWaitEnabled ? lotWaitMinutes : 0} min</span>
+                    <input
+                      type="range" min="0" max="5" step="1" value={lotWaitEnabled ? lotWaitMinutes : 0}
+                      disabled={!lotWaitEnabled} onChange={(event) => setLotWaitMinutes(Number(event.target.value))}
+                      className="block w-full accent-[#0B5A8E] disabled:opacity-50"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={lotTyping} onChange={(event) => setLotTyping(event.target.checked)} />
+                    Typing
+                  </label>
+                  <p className="text-xs text-slate-500">Con 100 mensajes o más, la cola se divide en cuatro tandas. Hay al menos 15 minutos entre el inicio de cada tanda.</p>
+                </fieldset>
+              )}
               {messageSelection.skipped > 0 && (
                 <p className="rounded-lg bg-amber-50 p-3 text-amber-800">
                   {messageSelection.skipped} selección(es) no se enviarán porque no aparecen como recordatorio disponible en SAP.
