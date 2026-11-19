@@ -209,7 +209,7 @@ export default function OverduePortfolioView() {
   const [campaignError, setCampaignError] = useState("");
   const [messageSelection, setMessageSelection] = useState(null);
   const [lotWaitEnabled, setLotWaitEnabled] = useState(false);
-  const [lotWaitMinutes, setLotWaitMinutes] = useState(0);
+  const [lotWaitSeconds, setLotWaitSeconds] = useState(45);
   const [lotTyping, setLotTyping] = useState(true);
   const [sendingMessages, setSendingMessages] = useState(false);
   const [queueingLots, setQueueingLots] = useState(false);
@@ -648,7 +648,7 @@ export default function OverduePortfolioView() {
           lot_groups: lotGroups.map(({ body }) => body.collection_selections
             ? { collection_selections: body.collection_selections }
             : { due_date: body.due_date, delivery_keys: body.delivery_keys }),
-          lot_send_options: { wait_minutes: lotWaitEnabled ? lotWaitMinutes : 0, typing: lotTyping },
+          lot_send_options: { ...(lotWaitEnabled ? { wait_seconds: lotWaitSeconds } : { wait_minutes: 0 }), typing: lotTyping },
         },
       },
       ...messageSelection.groups.filter((group) => group.body.tipo_cartera === "edificios"),
@@ -1231,11 +1231,11 @@ export default function OverduePortfolioView() {
                     Tiempo de espera entre mensajes
                   </label>
                   <label className="block">
-                    <span className="sr-only">Minutos de espera entre mensajes</span>
-                    <span aria-hidden="true">{lotWaitEnabled ? lotWaitMinutes : 0} min</span>
+                    <span className="sr-only">Segundos de espera entre mensajes</span>
+                    <span aria-hidden="true">{lotWaitSeconds} segundos</span>
                     <input
-                      type="range" min="0" max="5" step="1" value={lotWaitEnabled ? lotWaitMinutes : 0}
-                      disabled={!lotWaitEnabled} onChange={(event) => setLotWaitMinutes(Number(event.target.value))}
+                      type="range" min="45" max="300" step="15" value={lotWaitSeconds}
+                      disabled={!lotWaitEnabled} onChange={(event) => setLotWaitSeconds(Number(event.target.value))}
                       className="block w-full accent-[#0B5A8E] disabled:opacity-50"
                     />
                   </label>
