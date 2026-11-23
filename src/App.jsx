@@ -666,7 +666,7 @@ function AppShell({ darkMode, onToggleDarkMode }) {
           } />
 
           <Route path="/settings/automation" element={
-            isAdmin ? <AutomationView /> : <Navigate to="/dashboard" replace />
+            (isAdmin || role === 'supervisor') ? <AutomationView /> : <Navigate to="/dashboard" replace />
           } />
 
           <Route path="/agent-call-tests" element={
