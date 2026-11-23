@@ -25,3 +25,18 @@ test('cuenta clientes y proyectos con saldo sin duplicar registros', () => {
   assert.equal(result.pendingClientCount, 2);
   assert.equal(result.pendingProjectCount, 2);
 });
+
+test('desglosa saldo vencido y mensajes filtrados por cliente, y cuenta proyectos SAP sin saldo', () => {
+  const clients = [{ codigo_cliente: 'C1', nombre_cliente: 'Ana', empresa: 'A', lotes: [{ proyecto: 'Uno', cuotas_atrasadas: [
+    { fecha_compromiso: '2026-11-01', total_a_pagar: 20 },
+    { fecha_compromiso: '2026-11-05', total_a_pagar: 30 },
+    { fecha_compromiso: '2026-11-23', total_a_pagar: 100 },
+  ] }] }];
+  const deliveries = [{ empresa: 'A', proyecto: 'Uno', codigo_cliente: 'C1', nombre_cliente: 'Ana', enviados: 2 }];
+  const status = [{ empresa: 'A', proyecto: 'Uno', saldo_pendiente: true }, { empresa: 'B', proyecto: 'Dos', saldo_pendiente: false }];
+  const result = buildMessagingDashboard(clients, [], [], '2026-11-23', deliveries, status);
+  const customer = [...result.rows[0].customers.values()][0];
+  assert.deepEqual([customer.cents, customer.installments, customer.sent], [5000, 1, 2]);
+  assert.equal(result.currentProjectCount, 1);
+  assert.equal(result.pendingProjectCount, 1);
+});
