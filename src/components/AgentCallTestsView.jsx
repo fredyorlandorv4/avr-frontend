@@ -830,7 +830,6 @@ export default function AgentCallTestsView() {
   const [callMode, setCallMode] = useState("call");
   const [recalls, setRecalls] = useState([]);
   const [recallKey, setRecallKey] = useState("");
-  const [recallPhone, setRecallPhone] = useState("");
   const [loadingRecalls, setLoadingRecalls] = useState(false);
   const [recallRefresh, setRecallRefresh] = useState(0);
   const selectedRecall = recalls.find((item) => item.key === recallKey);
@@ -947,7 +946,6 @@ export default function AgentCallTestsView() {
     setCallMode("call");
     setRecalls([]);
     setRecallKey("");
-    setRecallPhone("");
     setTest(agent);
     setValues(initialValues(agent.fields));
     setFieldErrors({});
@@ -972,9 +970,9 @@ export default function AgentCallTestsView() {
   };
   const testBody = useMemo(
     () => callMode === "recall"
-      ? { call_mode: "recall", recall_key: recallKey, phone: recallPhone }
+      ? { call_mode: "recall", recall_key: recallKey }
       : (test ? requestBody(test.fields || [], values) : null),
-    [test, values, callMode, recallKey, recallPhone],
+    [test, values, callMode, recallKey],
   );
 
   const validate = async () => {
@@ -1037,7 +1035,7 @@ export default function AgentCallTestsView() {
           onUnauthorized: logout,
           body: {
             ...testBody,
-            phone: validation.phone || testBody.phone,
+            ...(callMode === "call" && { phone: validation.phone || testBody.phone }),
             confirm_call: true,
           },
         },
@@ -1269,11 +1267,12 @@ export default function AgentCallTestsView() {
                         {selectedRecall.context && <pre className="mt-2 whitespace-pre-wrap break-words">{JSON.stringify(selectedRecall.context, null, 2)}</pre>}
                       </details>
                     )}
-                    <label className="block text-sm font-medium">
-                      Teléfono al que se llamará para la prueba
-                      <input type="tel" className={inputCls} value={recallPhone} disabled={validating || submitting}
-                        onChange={(e) => { setRecallPhone(e.target.value); setValidation(null); }} />
-                    </label>
+                    {selectedRecall && (
+                      <label className="block text-sm font-medium">
+                        Teléfono de destino (CCE)
+                        <input type="tel" className={inputCls} value={selectedRecall.phone ?? ""} readOnly />
+                      </label>
+                    )}
                   </>
                 )}
                 {callMode === "call" && visibleTestFields.map((field) => (
@@ -1296,7 +1295,7 @@ export default function AgentCallTestsView() {
               </div>
               <div className="p-5 border-t flex flex-wrap justify-end gap-3">
                 <button
-                  disabled={validating || submitting || (callMode === "recall" && (!selectedRecall || !recallPhone.trim() || loadingRecalls))}
+                  disabled={validating || submitting || (callMode === "recall" && (!selectedRecall?.phone || loadingRecalls))}
                   onClick={validate}
                   className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                 >
