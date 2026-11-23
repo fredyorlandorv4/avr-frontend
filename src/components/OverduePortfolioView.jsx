@@ -220,6 +220,7 @@ export default function OverduePortfolioView() {
   const [projectFilter, setProjectFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [portfolioFilter, setPortfolioFilter] = useState('todo');
+  const [showCommitments, setShowCommitments] = useState(false);
   const allowedSourcesKey = sapSources.slice().sort().join('|');
   const clients = useMemo(() => allClients.filter(client => allowedSourcesKey.split('|').includes(client.source) && (portfolioFilter === 'todo' || client.source === portfolioFilter)), [allClients, portfolioFilter, allowedSourcesKey]);
   const selectAllRef = useRef(null);
@@ -265,7 +266,7 @@ export default function OverduePortfolioView() {
       setExpandedLots(new Set());
       await Promise.all(sources.map(async source => {
         try {
-          const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${source}&incluir_metricas=false`, {
+          const response = await apiFetch(`/api/v1/cobros/cartera-vencida?tipo=${source}&incluir_metricas=false&solo_compromisos=${showCommitments}`, {
             token: authToken,
             onUnauthorized: logout,
           });
@@ -299,7 +300,7 @@ export default function OverduePortfolioView() {
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [authToken, logout, canViewBuildings, allowedSourcesKey]);
+  }, [authToken, logout, canViewBuildings, allowedSourcesKey, showCommitments]);
 
   useEffect(() => {
     load();
@@ -436,6 +437,7 @@ export default function OverduePortfolioView() {
     : selectedAreaSubareas.length > 0;
 
   const openCampaignForm = () => {
+    if (showCommitments) return;
     setCampaignError("");
     setCampaignName("");
     setSelectedProjectId("");
@@ -444,6 +446,7 @@ export default function OverduePortfolioView() {
   };
 
   const createCampaign = async () => {
+    if (showCommitments) return;
     if (selectedClients.some(client => client.currency === 'USD')) {
       setCampaignError('Las campañas de cobros actuales trabajan en quetzales. No se pueden incluir registros en dólares de Edificios.');
       return;
@@ -546,6 +549,7 @@ export default function OverduePortfolioView() {
   };
 
   const prepareMessageSend = async (sourceClients = clients, sourceIds = selectedClientIds) => {
+    if (showCommitments) return;
     const selected = sourceClients.filter((client) => sourceIds.has(client.id));
     if (!selected.length) return;
     setMessageError("");
@@ -744,7 +748,7 @@ export default function OverduePortfolioView() {
             <button
               onClick={openCampaignForm}
               disabled={
-                loading || selectedClientIds.size === 0 || blockingSend
+                loading || selectedClientIds.size === 0 || blockingSend || showCommitments
               }
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#053E68] text-white text-sm font-medium hover:bg-[#06497c] disabled:opacity-50"
             >
@@ -755,7 +759,7 @@ export default function OverduePortfolioView() {
             <button
               onClick={() => prepareMessageSend()}
               disabled={
-                loading || selectedClientIds.size === 0 || sendingMessages || preparingMessages
+                loading || selectedClientIds.size === 0 || sendingMessages || preparingMessages || showCommitments
               }
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0B5A8E] px-4 py-2 text-sm font-medium text-white hover:bg-[#053E68] disabled:opacity-50"
             >
@@ -786,6 +790,15 @@ export default function OverduePortfolioView() {
             {messageSuccess}
           </p>
         )}
+        <label className="mt-5 inline-flex cursor-pointer items-center gap-3 text-sm font-medium text-gray-700">
+          <input type="checkbox" role="switch" checked={showCommitments}
+            disabled={sendingMessages || preparingMessages || creating}
+            onChange={(event) => { setShowCommitments(event.target.checked); setSelectedClientIds(new Set()); setProjectFilter(''); setShowCampaignForm(false); setMessageSelection(null); }}
+            className="peer sr-only" />
+          <span aria-hidden="true" className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-[#0B5A8E] peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-[#0B5A8E] peer-disabled:opacity-50" />
+          Compromisos de pago
+        </label>
+        {showCommitments && <p className="mt-2 text-xs text-gray-500">Clientes con compromiso vigente excluidos de la consulta principal.</p>}
         <div className="mt-5 grid gap-3 lg:grid-cols-4">
           <label className="text-sm font-medium text-gray-700">Cartera<select value={portfolioFilter} onChange={event => { setPortfolioFilter(event.target.value); setSelectedClientIds(new Set()); setProjectFilter(''); }} disabled={loading || blockingSend} className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-[#053E68]"><option value="todo">Todo</option>{sapSources.includes('lotes') && <option value="lotes">Lotes</option>}{sapSources.includes('edificios') && <option value="edificios">Edificios</option>}</select></label>
           <label className="text-sm font-medium text-gray-700">
@@ -849,7 +862,7 @@ export default function OverduePortfolioView() {
                       type="checkbox"
                       checked={allVisibleSelected}
                       onChange={toggleVisibleClients}
-                      disabled={visibleClients.length === 0}
+                      disabled={visibleClients.length === 0 || showCommitments}
                       aria-label={
                         allVisibleSelected
                           ? "Deseleccionar todos los registros visibles"
@@ -891,6 +904,7 @@ export default function OverduePortfolioView() {
                           <input
                             type="checkbox"
                             checked={selectedClientIds.has(client.id)}
+                            disabled={showCommitments}
                             onChange={() => toggleClient(client.id)}
                             aria-label={`Seleccionar ${client.name}`}
                             className="h-4 w-4 accent-[#053E68]"
