@@ -827,6 +827,13 @@ export default function AgentCallTestsView() {
   const [error, setError] = useState("");
   const [test, setTest] = useState(null);
   const [values, setValues] = useState({});
+  const [callMode, setCallMode] = useState("call");
+  const [recalls, setRecalls] = useState([]);
+  const [recallKey, setRecallKey] = useState("");
+  const [recallPhone, setRecallPhone] = useState("");
+  const [loadingRecalls, setLoadingRecalls] = useState(false);
+  const [recallRefresh, setRecallRefresh] = useState(0);
+  const selectedRecall = recalls.find((item) => item.key === recallKey);
   const [fieldErrors, setFieldErrors] = useState({});
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState(null);
@@ -876,7 +883,8 @@ export default function AgentCallTestsView() {
               current && {
                 ...current,
                 ...data,
-                polling: !TERMINAL_STATUSES.has(data.status),
+                status: data.state,
+                polling: !TERMINAL_STATUSES.has(data.state),
               },
           );
         else
@@ -910,8 +918,36 @@ export default function AgentCallTestsView() {
     };
   }, [activeCall?.status_url, activeCall?.polling, authToken, logout]);
 
+  useEffect(() => {
+    if (!test || callMode !== "recall") return;
+    let cancelled = false;
+    setLoadingRecalls(true);
+    setRecalls([]);
+    setRecallKey("");
+    setValidation(null);
+    setError("");
+    apiFetch(`/api/v1/agent-call-tests/agents/${test.agent_id}/recalls`, {
+      token: authToken, onUnauthorized: logout,
+    }).then(async (response) => {
+      const data = await response.json();
+      if (cancelled) return;
+      if (!response.ok) throw new Error(apiMessage(response.status, data.detail));
+      setRecalls(data.items);
+    }).catch((err) => {
+      if (!cancelled && err.message !== "Unauthorized") setError(err.message);
+    }).finally(() => {
+      if (!cancelled) setLoadingRecalls(false);
+    });
+    return () => { cancelled = true; };
+  }, [test, callMode, recallRefresh, authToken, logout]);
+
   const openTest = (agent) => {
     if (activeCall?.polling) return;
+    setError("");
+    setCallMode("call");
+    setRecalls([]);
+    setRecallKey("");
+    setRecallPhone("");
     setTest(agent);
     setValues(initialValues(agent.fields));
     setFieldErrors({});
@@ -935,12 +971,14 @@ export default function AgentCallTestsView() {
     }));
   };
   const testBody = useMemo(
-    () => (test ? requestBody(test.fields || [], values) : null),
-    [test, values],
+    () => callMode === "recall"
+      ? { call_mode: "recall", recall_key: recallKey, phone: recallPhone }
+      : (test ? requestBody(test.fields || [], values) : null),
+    [test, values, callMode, recallKey, recallPhone],
   );
 
   const validate = async () => {
-    const required = (test.fields || []).reduce((errors, field) => {
+    const required = (callMode === "recall" ? [] : test.fields || []).reduce((errors, field) => {
       const value = values[field.path];
       if (
         field.required &&
@@ -1009,8 +1047,13 @@ export default function AgentCallTestsView() {
         setActiveCall({ ...data, status: "queued", polling: true });
         setConfirming(false);
         setTest(null);
-      } else setError(apiMessage(res.status, data.detail));
+      } else {
+        setConfirming(false);
+        setValidation(null);
+        setError(apiMessage(res.status, data.detail));
+      }
     } catch (err) {
+      setConfirming(false);
       if (err.message !== "Unauthorized")
         setError("No se pudo encolar la llamada.");
     } finally {
@@ -1039,7 +1082,7 @@ export default function AgentCallTestsView() {
           Actualizar
         </button>
       </div>
-      {error && (
+      {error && !test && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
           {error}
         </div>
@@ -1074,7 +1117,7 @@ export default function AgentCallTestsView() {
             </p>
             <p>
               <span className="text-gray-400">Finalizada:</span>{" "}
-              {formatDate(activeCall.completed_at || activeCall.finished_at)}
+              {formatDate(activeCall.ended_at)}
             </p>
           </div>
           {activeCall.error && (
@@ -1193,7 +1236,47 @@ export default function AgentCallTestsView() {
                 </button>
               </div>
               <div className="p-5 overflow-y-auto space-y-4">
-                {visibleTestFields.map((field) => (
+                {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+                {test.supports_recall && (
+                  <label className="block text-sm font-medium">
+                    Tipo de llamada
+                    <select className={inputCls} value={callMode} disabled={validating || submitting}
+                      onChange={(e) => { setCallMode(e.target.value); setValidation(null); setError(""); }}>
+                      <option value="call">Llamada</option>
+                      <option value="recall">Rellamada</option>
+                    </select>
+                  </label>
+                )}
+                {callMode === "recall" && (
+                  <>
+                    <div className="flex items-end gap-3">
+                      <label className="flex-1 text-sm font-medium">
+                        Cliente de CCE
+                        <select className={inputCls} value={recallKey} disabled={loadingRecalls || validating || submitting}
+                          onChange={(e) => { setRecallKey(e.target.value); setValidation(null); }}>
+                          <option value="">{loadingRecalls ? "Consultando CCE…" : recalls.length ? "Selecciona un cliente" : "Sin rellamadas disponibles"}</option>
+                          {recalls.map((item) => <option key={item.key} value={item.key}>{item.client_name} · {item.project}</option>)}
+                        </select>
+                      </label>
+                      <button type="button" disabled={loadingRecalls || validating || submitting} onClick={() => setRecallRefresh((n) => n + 1)}>
+                        Actualizar
+                      </button>
+                    </div>
+                    {selectedRecall && (
+                      <details key={recallKey} className="rounded-lg border p-3 text-sm">
+                        <summary>Ver guion y contexto de la rellamada</summary>
+                        <p className="mt-2 whitespace-pre-wrap">{selectedRecall.prompt}</p>
+                        {selectedRecall.context && <pre className="mt-2 whitespace-pre-wrap break-words">{JSON.stringify(selectedRecall.context, null, 2)}</pre>}
+                      </details>
+                    )}
+                    <label className="block text-sm font-medium">
+                      Teléfono al que se llamará para la prueba
+                      <input type="tel" className={inputCls} value={recallPhone} disabled={validating || submitting}
+                        onChange={(e) => { setRecallPhone(e.target.value); setValidation(null); }} />
+                    </label>
+                  </>
+                )}
+                {callMode === "call" && visibleTestFields.map((field) => (
                   <DynamicField
                     key={field.path}
                     field={field}
@@ -1213,7 +1296,7 @@ export default function AgentCallTestsView() {
               </div>
               <div className="p-5 border-t flex flex-wrap justify-end gap-3">
                 <button
-                  disabled={validating || submitting}
+                  disabled={validating || submitting || (callMode === "recall" && (!selectedRecall || !recallPhone.trim() || loadingRecalls))}
                   onClick={validate}
                   className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                 >
@@ -1242,7 +1325,7 @@ export default function AgentCallTestsView() {
                     ¿Realizar llamada real?
                   </h3>
                   <p className="text-sm text-gray-600 mt-2">
-                    Esta acción realizará una llamada telefónica real. El agente
+                    Se realizará una llamada telefónica real al <b>{validation?.phone}</b>. El agente
                     puede ejecutar tools que modifiquen información en el CRM.
                     ¿Deseas continuar?
                   </p>
