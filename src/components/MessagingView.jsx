@@ -675,6 +675,7 @@ export default function MessagingView() {
                   "Instancia",
                   "Archivo",
                   "Estado",
+                  "OV",
                   "Vista previa",
                   "Logo Estado de Cuenta",
                   "Acciones",
@@ -712,6 +713,13 @@ export default function MessagingView() {
                     >
                       {asBoolean(project.active) ? "Activa" : "Inactiva"}
                     </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <Toggle
+                      label={`Incluir código de pago OV para ${project.company_name}`}
+                      checked={asBoolean(project.ov_enabled)}
+                      onChange={(ov_enabled) => updateProject(project, "PATCH", { ov_enabled })}
+                    />
                   </td>
                   <td className="px-3 py-3">
                     <ImagePreview
@@ -759,7 +767,7 @@ export default function MessagingView() {
               {!loading && projects.length === 0 && (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="8"
                     className="px-3 py-10 text-center text-slate-500"
                   >
                     Aún no hay configuraciones registradas.

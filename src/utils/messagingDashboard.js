@@ -1,8 +1,9 @@
 import { portfolioClientId } from './accessScopes.js';
+import { overdueInstallmentTotal } from './overdueInstallments.js';
 
 const normalize = value => String(value || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').replace(/\s+/g, ' ');
 
-export function buildMessagingDashboard(clients, deliveries, configs) {
+export function buildMessagingDashboard(clients, deliveries, configs, today) {
   const projectsByCompany = new Map();
   for (const config of configs || []) {
     if (!config.active || !config.company_name || !config.project_name) continue;
@@ -29,8 +30,9 @@ export function buildMessagingDashboard(clients, deliveries, configs) {
     for (const lot of client.lotes || []) {
       const company = source === 'edificios' ? lot.proyecto : client.empresa;
       const project = source === 'edificios' ? buildingProject(company) : lot.proyecto;
-      groupFor(source, company, project).cents += Math.round((Number(lot.total_pendiente_lote) || 0) * 100);
       const installments = lot.cuotas_atrasadas ?? lot.cuotas ?? lot.installments ?? [];
+      const overdue = installments.filter(item => Number(item.total_a_pagar ?? item.saldo ?? item.monto_pendiente) > 0);
+      groupFor(source, company, project).cents += Math.round(overdueInstallmentTotal(overdue, today) * 100);
       const hasPending = Number(lot.total_pendiente_lote ?? lot.total_pendiente ?? lot.subtotal) > 0 ||
         (Array.isArray(installments) && installments.some(item => Number(item.total_a_pagar ?? item.saldo ?? item.monto_pendiente) > 0));
       if (hasPending) {

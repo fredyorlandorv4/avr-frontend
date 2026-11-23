@@ -86,7 +86,7 @@ export default function MessagingDashboardView() {
   const { rows, totals, pendingProjectCount } = useMemo(() => {
     const allowed = allowedSourcesKey.split('|');
     const matches = item => allowed.includes(item.tipo_cartera || 'lotes') && (source === 'todo' || (item.tipo_cartera || 'lotes') === source);
-    return buildMessagingDashboard(portfolio.clients.filter(matches), messages.deliveries.filter(matches), messages.configs);
+    return buildMessagingDashboard(portfolio.clients.filter(matches), messages.deliveries.filter(matches), messages.configs, today());
   }, [portfolio.clients, messages, source, allowedSourcesKey]);
   const metrics = useMemo(() => sumPortfolioMetrics(portfolio.metrics, source, allowedSourcesKey.split('|')), [portfolio.metrics, source, allowedSourcesKey]);
   const loading = portfolioLoading || messagesLoading;
@@ -110,7 +110,7 @@ export default function MessagingDashboardView() {
     {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="rounded-2xl border border-gray-100 bg-white p-5"><p className="text-sm text-gray-500">Mensajes enviados en el período</p><p className="mt-2 text-2xl font-bold text-[#053E68]">{loading ? '…' : totals.sent.toLocaleString('es-GT')}</p><p className="mt-1 text-xs text-gray-500">Envíos aceptados por Evolution, según fecha de envío.</p></div>
-      <div className="rounded-2xl border border-gray-100 bg-white p-5"><p className="text-sm text-gray-500">Cartera actual de Consulta SAP</p><div className="mt-2 flex flex-wrap gap-x-5 text-2xl font-bold text-[#053E68]">{loading ? '…' : <>{(source !== 'edificios' && sapSources.includes('lotes')) && <span>{formatPortfolioMoney(totals.GTQ / 100, 'GTQ')}</span>}{(source !== 'lotes' && sapSources.includes('edificios')) && <span>{formatPortfolioMoney(totals.USD / 100, 'USD')}</span>}</>}</div><p className="mt-1 text-xs text-gray-500">Saldo actual; no cambia con el período de mensajes.</p></div>
+      <div className="rounded-2xl border border-gray-100 bg-white p-5"><p className="text-sm text-gray-500">Saldo vencido de Consulta SAP</p><div className="mt-2 flex flex-wrap gap-x-5 text-2xl font-bold text-[#053E68]">{loading ? '…' : <>{(source !== 'edificios' && sapSources.includes('lotes')) && <span>{formatPortfolioMoney(totals.GTQ / 100, 'GTQ')}</span>}{(source !== 'lotes' && sapSources.includes('edificios')) && <span>{formatPortfolioMoney(totals.USD / 100, 'USD')}</span>}</>}</div><p className="mt-1 text-xs text-gray-500">Cuotas vencidas a la fecha actual; no cambia con el período de mensajes.</p></div>
     </div>
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="rounded-2xl border border-gray-100 bg-white p-5"><p className="text-sm text-gray-500">Total de Deudores</p><p className="mt-2 text-3xl font-bold text-[#053E68]">{metricValue(metrics?.debtors)}</p><p className="mt-2 text-xs text-gray-500">Clientes de la cartera SAP con al menos un saldo pendiente, incluidos los que tienen compromiso de pago.</p></div>
@@ -126,11 +126,11 @@ export default function MessagingDashboardView() {
     </div>
     <section className="rounded-2xl border border-gray-100 bg-white p-5">
       <h2 className="font-semibold text-[#053E68]">Mensajes enviados por proyecto</h2>
-      <p className="mt-1 text-sm text-gray-500">Envíos aceptados en el período seleccionado. El saldo corresponde a la cartera actual.</p>
+      <p className="mt-1 text-sm text-gray-500">Envíos aceptados en el período seleccionado. El saldo corresponde a cuotas vencidas a la fecha actual.</p>
       {loading ? <p className="py-10 text-center text-gray-500">Cargando estadísticas…</p> : !rows.length ? <p className="py-10 text-center text-gray-500">No hay datos para los filtros seleccionados.</p> : <div className="mt-4 space-y-3">{rows.map(row => <div key={row.key} className="grid gap-2 border-t border-gray-100 pt-3 sm:grid-cols-[minmax(150px,1fr)_minmax(120px,2fr)_140px] sm:items-center">
         <div className="min-w-0"><p className="break-words font-medium text-gray-800">{row.project}</p><p className="text-xs text-gray-500">{row.company} · {row.source === 'edificios' ? 'Edificios' : 'Lotes'}</p></div>
         <div><div className="mb-1 flex justify-between gap-2 text-sm"><span className="text-gray-500">Mensajes enviados</span><strong className="text-[#053E68]">{row.sent.toLocaleString('es-GT')}</strong></div><div className="h-3 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-[#0B5F8F]" style={{ width: `${row.sent / maxSent * 100}%` }} /></div></div>
-        <div className="text-sm sm:text-right"><span className="block text-xs text-gray-500">Saldo pendiente</span><strong className="text-[#053E68]">{formatPortfolioMoney(row.cents / 100, row.source === 'edificios' ? 'USD' : 'GTQ')}</strong></div>
+        <div className="text-sm sm:text-right"><span className="block text-xs text-gray-500">Saldo vencido</span><strong className="text-[#053E68]">{formatPortfolioMoney(row.cents / 100, row.source === 'edificios' ? 'USD' : 'GTQ')}</strong></div>
       </div>)}</div>}
     </section>
   </div>;
