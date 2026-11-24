@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, Loader2, RefreshCw } from 'lucide-react';
 import { apiFetch } from '../api.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import AutomationExceptions from './AutomationExceptions.jsx';
 
 const DAYS = [
   { key: 'statement', label: 'Día de Envío de Estados de Cuenta' },
@@ -20,6 +21,7 @@ export default function AutomationView() {
   const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
+  const [showExceptions, setShowExceptions] = useState(false);
 
   const changeDay = useCallback((key, value) => {
     if (value !== '' && (!/^\d{1,2}$/.test(value) || Number(value) < 1 || Number(value) > 31)) return;
@@ -82,14 +84,15 @@ export default function AutomationView() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-[#053E68]">Automatización</h2>
-          <p className="mt-1 text-sm text-slate-500">Define los días y revisa las empresas disponibles.</p>
+          <p className="mt-1 text-sm text-slate-500">{showExceptions ? "Clientes de la cartera SAP." : "Define los días y revisa las empresas disponibles."}</p>
         </div>
-        <div className="flex gap-3"><button type="button" onClick={reload} disabled={loading || saving} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+        <div className="flex items-center gap-3"><button type="button" role="switch" aria-checked={showExceptions} onClick={() => setShowExceptions((value) => !value)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium"><span>Excepciones</span><span className={`relative h-6 w-11 rounded-full transition-colors ${showExceptions ? "bg-[#0B5A8E]" : "bg-slate-300"}`}><span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${showExceptions ? "translate-x-5" : "translate-x-0.5"}`} /></span></button>{!showExceptions && <><button type="button" onClick={reload} disabled={loading || saving} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar
         </button>
-        <button type="button" onClick={save} disabled={loading || saving || !loaded} className="rounded-lg bg-[#053E68] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar cambios'}</button></div>
+        <button type="button" onClick={save} disabled={loading || saving || !loaded} className="rounded-lg bg-[#053E68] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar cambios'}</button></>}</div>
       </div>
 
+      <div key={showExceptions ? "exceptions" : "settings"} className="animate-automation-slide">{showExceptions ? <AutomationExceptions /> : <div className="space-y-6">
       <p role="note" className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-600">
         Revisión diaria a las 8:00 a. m., hora de Guatemala. Si el mes tiene menos días que el configurado, se usará el último día del mes. Los estados de cuenta se envían a todos los clientes de Edificios; cobros y recordatorios, a quienes corresponda en cada cartera.
       </p>
@@ -148,6 +151,8 @@ export default function AutomationView() {
             </div>
           ) : <p className="p-10 text-center text-sm text-slate-500">No hay empresas activas en la configuración de mensajería.</p>)}
       </section>
+      </div>}</div>
+      <style>{`@keyframes automation-slide { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: translateX(0); } } @media (prefers-reduced-motion: no-preference) { .animate-automation-slide { animation: automation-slide 220ms ease-out; } }`}</style>
     </div>
   );
 }
