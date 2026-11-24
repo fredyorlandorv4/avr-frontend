@@ -830,6 +830,7 @@ export default function AgentCallTestsView() {
   const [callMode, setCallMode] = useState("call");
   const [recalls, setRecalls] = useState([]);
   const [recallKey, setRecallKey] = useState("");
+  const [recallPhone, setRecallPhone] = useState("");
   const [loadingRecalls, setLoadingRecalls] = useState(false);
   const [recallRefresh, setRecallRefresh] = useState(0);
   const selectedRecall = recalls.find((item) => item.key === recallKey);
@@ -923,6 +924,7 @@ export default function AgentCallTestsView() {
     setLoadingRecalls(true);
     setRecalls([]);
     setRecallKey("");
+    setRecallPhone("");
     setValidation(null);
     setError("");
     apiFetch(`/api/v1/agent-call-tests/agents/${test.agent_id}/recalls`, {
@@ -946,6 +948,7 @@ export default function AgentCallTestsView() {
     setCallMode("call");
     setRecalls([]);
     setRecallKey("");
+    setRecallPhone("");
     setTest(agent);
     setValues(initialValues(agent.fields));
     setFieldErrors({});
@@ -970,9 +973,9 @@ export default function AgentCallTestsView() {
   };
   const testBody = useMemo(
     () => callMode === "recall"
-      ? { call_mode: "recall", recall_key: recallKey }
+      ? { call_mode: "recall", recall_key: recallKey, phone: recallPhone }
       : (test ? requestBody(test.fields || [], values) : null),
-    [test, values, callMode, recallKey],
+    [test, values, callMode, recallKey, recallPhone],
   );
 
   const validate = async () => {
@@ -1035,7 +1038,7 @@ export default function AgentCallTestsView() {
           onUnauthorized: logout,
           body: {
             ...testBody,
-            ...(callMode === "call" && { phone: validation.phone || testBody.phone }),
+            phone: validation.phone || testBody.phone,
             confirm_call: true,
           },
         },
@@ -1251,7 +1254,12 @@ export default function AgentCallTestsView() {
                       <label className="flex-1 text-sm font-medium">
                         Cliente de CCE
                         <select className={inputCls} value={recallKey} disabled={loadingRecalls || validating || submitting}
-                          onChange={(e) => { setRecallKey(e.target.value); setValidation(null); }}>
+                          onChange={(e) => {
+                            const key = e.target.value;
+                            setRecallKey(key);
+                            setRecallPhone(recalls.find((item) => item.key === key)?.phone || "");
+                            setValidation(null);
+                          }}>
                           <option value="">{loadingRecalls ? "Consultando CCE…" : recalls.length ? "Selecciona un cliente" : "Sin rellamadas disponibles"}</option>
                           {recalls.map((item) => <option key={item.key} value={item.key}>{item.client_name} · {item.project}</option>)}
                         </select>
@@ -1269,8 +1277,9 @@ export default function AgentCallTestsView() {
                     )}
                     {selectedRecall && (
                       <label className="block text-sm font-medium">
-                        Teléfono de destino (CCE)
-                        <input type="tel" className={inputCls} value={selectedRecall.phone ?? ""} readOnly />
+                        Teléfono de destino para la prueba
+                        <input type="tel" className={inputCls} value={recallPhone} disabled={validating || submitting}
+                          onChange={(e) => { setRecallPhone(e.target.value); setValidation(null); }} />
                       </label>
                     )}
                   </>
@@ -1295,7 +1304,7 @@ export default function AgentCallTestsView() {
               </div>
               <div className="p-5 border-t flex flex-wrap justify-end gap-3">
                 <button
-                  disabled={validating || submitting || (callMode === "recall" && (!selectedRecall?.phone || loadingRecalls))}
+                  disabled={validating || submitting || (callMode === "recall" && (!selectedRecall || !recallPhone.trim() || loadingRecalls))}
                   onClick={validate}
                   className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                 >
